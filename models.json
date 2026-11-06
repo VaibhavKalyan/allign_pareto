@@ -1,0 +1,19 @@
+{
+    "model_families": [
+        {
+            "family_name": "Tulu 3 (Llama-3.1-8B)",
+            "provider": "AllenAI",
+            "base_model": "meta-llama/Llama-3.1-8B",
+            "sft_model": "allenai/Llama-3.1-Tulu-3-8B-SFT",
+            "dpo_model": "allenai/Llama-3.1-Tulu-3-8B-DPO",
+            "rlvr_final_model": "allenai/Llama-3.1-Tulu-3-8B"
+        },
+        {
+            "family_name": "Zephyr (Mistral-7B)",
+            "provider": "Hugging Face H4",
+            "base_model": "mistralai/Mistral-7B-v0.1",
+            "sft_model": "alignment-handbook/zephyr-7b-sft-full",
+            "dpo_model": "HuggingFaceH4/zephyr-7b-beta"
+        }
+    ]
+}
