@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.env
+outputs/
+dist/
+data/raw/*
+data/processed/*
+data/metadata/*
+!**/.gitkeep
+_archive/
+models/

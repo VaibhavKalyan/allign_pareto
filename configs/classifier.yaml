@@ -1,0 +1,40 @@
+experiment_name: align_pareto_m1_dual_classifier
+seed: 42
+data:
+  dolly_dataset: databricks/databricks-dolly-15k
+  wildguard_dataset: allenai/wildguardmix
+  # Pilot targets from spec §14 (starting points, not exact quotas); split evenly across sources
+  # within a quadrant where both sources have prompts. The real counts are reported, never padded.
+  target_quadrant_counts:
+    creative0_safety0: 7000
+    creative1_safety0: 3000
+    creative0_safety1: 3000
+    creative1_safety1: 1000
+  min_char_len: 15
+  near_dup_jaccard_threshold: 0.90
+  family_jaccard_threshold: 0.50
+  minhash_num_perm: 128
+  shingle_k: 3
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  creative_rule_audit_per_rule: 100
+model:
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+  embedding_dim: 384
+  classifier: LogisticRegression
+  C: 2.0
+  max_iter: 1000
+  class_weight: balanced
+  calibration: platt
+training:
+  seed: 42
+  batch_size: 256
+inference:
+  # Decision thresholds are tuned on the validation split (max F1); these are only the search range.
+  threshold_grid_min: 0.05
+  threshold_grid_max: 0.95
+  threshold_grid_step: 0.01
+quick_test:
+  # Used by `run_m1(quick=True)` for local smoke tests only; never for reported results.
+  per_quadrant: 150

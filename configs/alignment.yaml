@@ -1,0 +1,38 @@
+experiment_name: align_pareto_m2_qlora_dpo
+seed: 42
+model:
+  base_model_name: Qwen/Qwen3-0.6B
+  use_4bit_qlora: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_use_double_quant: true
+lora:
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  task_type: CAUSAL_LM
+dpo:
+  primary_dataset: Anthropic/hh-rlhf
+  fallback_dataset: Intel/orca_dpo_pairs
+  beta: 0.1
+  loss_type: sigmoid
+  learning_rate: 5.0e-05
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  max_length: 512
+  max_prompt_length: 256
+  warmup_ratio: 0.1
+lambda_interpolation:
+  formula: W_lambda = W_base + lambda * (alpha / r) * (B @ A)
+  default_grid:
+  - 0.0
+  - 0.25
+  - 0.5
+  - 0.75
+  - 1.0

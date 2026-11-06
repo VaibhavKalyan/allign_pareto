@@ -1,0 +1,5 @@
+dataset,role,canonical_url,approx_rows,license_or_terms,fields_used,limitations
+Dolly-15k,Primary M1 creative-intent weak labels,https://huggingface.co/datasets/databricks/databricks-dolly-15k,15011,CC BY-SA 3.0,"instruction; context; category","No explicit prompt-harm labels; category labels are weak proxies; audit before final training"
+WildGuardMix WildGuardTrain,Primary M1 prompt-harm labels,https://huggingface.co/datasets/allenai/wildguardmix,86759,ODC-BY plus AI2 Responsible Use Guidelines/access acceptance,"prompt; prompt_harm_label; subcategory; adversarial","No creative-intent labels; some harm labels missing; creative label must be annotated"
+WildGuardMix WildGuardTest,External safety evaluation only,https://huggingface.co/datasets/allenai/wildguardmix,1725,ODC-BY plus AI2 Responsible Use Guidelines/access acceptance,"prompt; prompt_harm_label; response labels","Do not train or tune thresholds on this split"
+XSTest,Optional later over-refusal evaluation,https://github.com/paul-rottger/xstest,450,CC BY 4.0 for prompts,"prompt; type","Not a creative classifier training set; preserve as independent evaluation"

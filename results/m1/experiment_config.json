@@ -1,0 +1,66 @@
+{
+  "m1_config": {
+    "experiment_name": "align_pareto_m1_dual_classifier",
+    "seed": 42,
+    "data": {
+      "dolly_dataset": "databricks/databricks-dolly-15k",
+      "wildguard_dataset": "allenai/wildguardmix",
+      "target_quadrant_counts": {
+        "creative0_safety0": 7000,
+        "creative1_safety0": 3000,
+        "creative0_safety1": 3000,
+        "creative1_safety1": 1000
+      },
+      "min_char_len": 15,
+      "near_dup_jaccard_threshold": 0.9,
+      "family_jaccard_threshold": 0.5,
+      "minhash_num_perm": 128,
+      "shingle_k": 3,
+      "train_ratio": 0.8,
+      "val_ratio": 0.1,
+      "test_ratio": 0.1,
+      "creative_rule_audit_per_rule": 100
+    },
+    "model": {
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "embedding_dim": 384,
+      "classifier": "LogisticRegression",
+      "C": 2.0,
+      "max_iter": 1000,
+      "class_weight": "balanced",
+      "calibration": "platt"
+    },
+    "training": {
+      "seed": 42,
+      "batch_size": 256
+    },
+    "inference": {
+      "threshold_grid_min": 0.05,
+      "threshold_grid_max": 0.95,
+      "threshold_grid_step": 0.01
+    },
+    "quick_test": {
+      "per_quadrant": 150
+    }
+  },
+  "training_meta": {
+    "embedding_backend": "sentence_transformers",
+    "embedding_dim": 384,
+    "train_samples": 11211,
+    "val_samples": 1397,
+    "creative_platt_scale": [
+      1.0711,
+      -0.8996
+    ],
+    "safety_platt_scale": [
+      1.0081,
+      -0.9052
+    ],
+    "thresholds": {
+      "creative": 0.46,
+      "safety": 0.47,
+      "val_f1_creative": 0.7633,
+      "val_f1_safety": 0.7951
+    }
+  }
+}
