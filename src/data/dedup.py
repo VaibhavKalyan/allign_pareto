@@ -64,6 +64,27 @@ def near_deduplicate_minhash(
     return df[keep].reset_index(drop=True), len(drop)
 
 
+def drop_near_duplicates_of(
+    df: pd.DataFrame, reference_prompts: List[str], threshold: float = 0.5, k: int = 3, num_perm: int = 128, seed: int = 42
+) -> Tuple[pd.DataFrame, int]:
+    """
+    Remove rows of `df` whose k-word-shingle Jaccard similarity to any `reference_prompts` entry is >= threshold.
+    Used to keep near-variants of held-out evaluation prompts (e.g. WildGuardTest) out of the training pool.
+    """
+    from datasketch import MinHashLSH
+    ref = [p for p in reference_prompts if isinstance(p, str) and p]
+    if not ref or df.empty:
+        return df.reset_index(drop=True), 0
+    ref_hashes = _minhashes(ref, k, num_perm, seed)
+    lsh = MinHashLSH(threshold=threshold, num_perm=num_perm)
+    for i, m in enumerate(ref_hashes):
+        lsh.insert(i, m)
+    cand_hashes = _minhashes(df["prompt"].tolist(), k, num_perm, seed)
+    drop = [any(ref_hashes[j].jaccard(m) >= threshold for j in lsh.query(m)) for m in cand_hashes]
+    keep = ~np.array(drop, dtype=bool)
+    return df[keep].reset_index(drop=True), int(np.sum(drop))
+
+
 def assign_prompt_families(
     df: pd.DataFrame, threshold: float = 0.5, k: int = 3, num_perm: int = 128, seed: int = 42
 ) -> Tuple[pd.DataFrame, Dict]:

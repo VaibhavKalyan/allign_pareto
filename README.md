@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 complete (real results in `results/m1/`); M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 code revised (label rules, leakage, safety threshold, reporting); `results/m1/` is from the previous code and must be re-run on Kaggle. M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -28,15 +28,17 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 | Step | File | State |
 |---|---|---|
 | Load real Dolly-15k + WildGuardMix (fail loudly; no synthetic fallback) | `src/data/download.py` | done |
-| Map to `creative_label` / `safety_label` (strict creative rule for WildGuardMix); unknown labels excluded | `src/data/mapping.py` | done |
-| Clean text, drop WildGuardTest overlap | `src/data/cleaning.py` | done |
+| Map to `creative_label` / `safety_label` (strict creative rule for WildGuardMix, incl. brainstorming; Dolly `creative_writing` rows that are plain questions excluded); unknown labels excluded | `src/data/mapping.py` | done |
+| Clean text, drop WildGuardTest overlap (exact here; near-duplicates in `dedup.py`) | `src/data/cleaning.py` | done |
 | SHA-256 + MinHash near-dup removal, prompt families, family-safe 80/10/10 split | `src/data/dedup.py` | done |
 | MiniLM embeddings + two LR heads (no silent TF-IDF fallback) | `src/classifier/train.py` | done |
 | Inference API | `src/classifier/predict.py` | done |
-| Metrics, confusion matrices, calibration, val-tuned thresholds | `src/classifier/evaluate.py` | done |
-| Orchestrator (+ WildGuardTest external eval, error analysis, creative-rule audit file) | `src/run_m1.py` | done |
-| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | done (Kaggle v3) |
-| Hand-check the creative rule (fill `human_creative_label`) | `results/m1/creative_rule_audit.csv` | to do (team) |
+| Metrics, confusion matrices, calibration, val-tuned thresholds (safety: recall-first), per-source breakdowns | `src/classifier/evaluate.py` | done |
+| Orchestrator (+ WildGuardTest external eval, fictional-framing eval slice, error analysis, audit files) | `src/run_m1.py` | done |
+| Unit tests for label rules, leakage filter, thresholds (`pytest tests`) | `tests/test_m1.py` | done |
+| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | re-run needed (code changed after v3) |
+| Hand-check creative labels (fill `human_creative_label`) | `results/m1/creative_rule_audit.csv`, `results/m1/fictional_framing_predictions.csv` | to do (team) |
+| Decide whether Dolly `brainstorming` (mostly lists/recommendations) and `creative_writing` letters/emails count as creative | `docs/ANNOTATION_GUIDE.md` | to do (team) |
 
 ### M2: DPO alignment (§18–19)
 | Step | File | State |
@@ -79,4 +81,5 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 ```bash
 python3 run_all.py --verify-only   # check files
 python3 run_all.py                 # run implemented milestones
+pytest tests                       # unit tests (no data download needed)
 ```

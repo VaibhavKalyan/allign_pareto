@@ -300,3 +300,59 @@ def tune_threshold(y_true: np.ndarray, y_prob: np.ndarray, grid: np.ndarray) -> 
         if f1 > best_f1:
             best_t, best_f1 = float(t), float(f1)
     return round(best_t, 4), round(best_f1, 4)
+
+
+def tune_threshold_for_recall(y_true: np.ndarray, y_prob: np.ndarray, grid: np.ndarray, target_recall: float) -> Tuple[float, float, float]:
+    """
+    Return (threshold, recall, precision) for the highest threshold in `grid` whose recall is >= target_recall.
+    Used for the safety head, where a missed harmful prompt costs more than a false alarm (spec §16).
+    Falls back to the lowest grid value if no threshold reaches the target. Validation split only.
+    """
+    y_true = np.asarray(y_true, dtype=int)
+    y_prob = np.asarray(y_prob, dtype=float)
+    n_pos = max(1, int((y_true == 1).sum()))
+    best = None
+    for t in sorted(round(float(g), 4) for g in grid):  # np.arange gives e.g. 0.6000000000000001
+        pred = y_prob >= t
+        tp = int(np.sum(pred & (y_true == 1)))
+        rec = tp / n_pos
+        prec = tp / max(1, int(pred.sum()))
+        if rec >= target_recall:
+            best = (float(t), rec, prec)
+    if best is None:
+        t = float(min(grid))
+        pred = y_prob >= t
+        tp = int(np.sum(pred & (y_true == 1)))
+        best = (t, tp / n_pos, tp / max(1, int(pred.sum())))
+    return round(best[0], 4), round(best[1], 4), round(best[2], 4)
+
+
+def subgroup_metrics(df: pd.DataFrame, label_col: str, prob_col: str, pred_col: str, group_col: str) -> Dict:
+    """
+    Per-group counts and error rates for one head, so a strong overall number cannot hide an easy subgroup
+    (e.g. Dolly prompts are all safety=0). ROC-AUC is only reported when both classes occur in the group.
+    """
+    out = {}
+    for g, sub in df.groupby(group_col):
+        y = sub[label_col].to_numpy(dtype=int)
+        yhat = sub[pred_col].to_numpy(dtype=int)
+        tp = int(((y == 1) & (yhat == 1)).sum())
+        fp = int(((y == 0) & (yhat == 1)).sum())
+        fn = int(((y == 1) & (yhat == 0)).sum())
+        tn = int(((y == 0) & (yhat == 0)).sum())
+        prec = tp / max(1, tp + fp)
+        rec = tp / max(1, tp + fn)
+        row = {
+            "n": int(len(sub)),
+            "n_positive": int(y.sum()),
+            "accuracy": round((tp + tn) / max(1, len(sub)), 4),
+            "precision": round(prec, 4) if (tp + fp) else None,
+            "recall": round(rec, 4) if (tp + fn) else None,
+            "f1": round(2 * prec * rec / max(1e-12, prec + rec), 4) if (tp + fn) and (tp + fp) else None,
+            "false_positive_rate": round(fp / (fp + tn), 4) if (fp + tn) else None,
+            "false_negative_rate": round(fn / (fn + tp), 4) if (fn + tp) else None,
+        }
+        if 0 < y.sum() < len(y):
+            row["roc_auc"] = round(compute_roc_curve_and_auc(y, sub[prob_col].to_numpy(dtype=float))[2], 4)
+        out[str(g)] = row
+    return out

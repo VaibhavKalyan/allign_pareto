@@ -4,6 +4,7 @@ Fetches the published files of Databricks Dolly-15k and AllenAI WildGuardMix (tr
 from the Hugging Face Hub. There is no synthetic fallback: if a dataset cannot be loaded the
 pipeline stops with an explanation (spec §8, §29.12).
 """
+import hashlib
 import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -59,6 +60,18 @@ def _fetch(repo_id: str, filename: str, cache_dir: Path, token: Optional[str]) -
         ) from e
 
 
+def _file_version(path: Path) -> Dict[str, Optional[str]]:
+    """Dataset version info (spec §31): file SHA-256, plus the Hub commit when the file came from the HF cache."""
+    path = Path(path)
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    parts = path.parts
+    revision = parts[parts.index("snapshots") + 1] if "snapshots" in parts else None
+    return {"sha256": h.hexdigest(), "hf_revision": revision}
+
+
 def load_raw_datasets(raw_dir: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict]:
     """Return (dolly, wildguard_train, wildguard_test) exactly as published, plus provenance metadata."""
     raw_dir = Path(raw_dir)
@@ -66,9 +79,12 @@ def load_raw_datasets(raw_dir: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Dat
     cache_dir = raw_dir / "hf_cache"
     token = resolve_hf_token()
 
-    dolly = pd.read_json(_fetch(DOLLY_REPO, DOLLY_FILE, cache_dir, token), lines=True)
-    wg_train = pd.read_parquet(_fetch(WILDGUARD_REPO, WILDGUARD_TRAIN_FILE, cache_dir, token))
-    wg_test = pd.read_parquet(_fetch(WILDGUARD_REPO, WILDGUARD_TEST_FILE, cache_dir, token))
+    dolly_path = _fetch(DOLLY_REPO, DOLLY_FILE, cache_dir, token)
+    wg_train_path = _fetch(WILDGUARD_REPO, WILDGUARD_TRAIN_FILE, cache_dir, token)
+    wg_test_path = _fetch(WILDGUARD_REPO, WILDGUARD_TEST_FILE, cache_dir, token)
+    dolly = pd.read_json(dolly_path, lines=True)
+    wg_train = pd.read_parquet(wg_train_path)
+    wg_test = pd.read_parquet(wg_test_path)
 
     for name, df, cols in [
         ("Dolly-15k", dolly, {"instruction", "context", "category"}),
@@ -81,9 +97,9 @@ def load_raw_datasets(raw_dir: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Dat
 
     meta = {
         "source_mode": "local_copy" if _local_copy(DOLLY_FILE) else "huggingface_hub",
-        "dolly": {"repo": DOLLY_REPO, "file": DOLLY_FILE, "rows": len(dolly)},
-        "wildguard_train": {"repo": WILDGUARD_REPO, "file": WILDGUARD_TRAIN_FILE, "rows": len(wg_train)},
-        "wildguard_test": {"repo": WILDGUARD_REPO, "file": WILDGUARD_TEST_FILE, "rows": len(wg_test)},
+        "dolly": {"repo": DOLLY_REPO, "file": DOLLY_FILE, "rows": len(dolly), **_file_version(dolly_path)},
+        "wildguard_train": {"repo": WILDGUARD_REPO, "file": WILDGUARD_TRAIN_FILE, "rows": len(wg_train), **_file_version(wg_train_path)},
+        "wildguard_test": {"repo": WILDGUARD_REPO, "file": WILDGUARD_TEST_FILE, "rows": len(wg_test), **_file_version(wg_test_path)},
     }
     return dolly, wg_train, wg_test, meta
 

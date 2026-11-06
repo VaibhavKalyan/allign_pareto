@@ -26,6 +26,33 @@ def set_global_seed(seed: int = 42) -> dict:
     return status
 
 
+REPRO_PACKAGES = [
+    "numpy", "pandas", "scipy", "scikit-learn", "torch", "transformers", "sentence-transformers",
+    "datasketch", "huggingface_hub", "pyarrow", "matplotlib", "seaborn", "peft", "trl", "bitsandbytes",
+]
+
+
+def environment_info(packages=REPRO_PACKAGES) -> dict:
+    """Python, platform, package versions, and GPU info to save next to every experiment (spec §31)."""
+    import platform
+    import importlib.metadata as md
+    versions = {}
+    for pkg in packages:
+        try:
+            versions[pkg] = md.version(pkg)
+        except md.PackageNotFoundError:
+            versions[pkg] = None
+    info = {"python": platform.python_version(), "platform": platform.platform(), "packages": versions, "gpu": None}
+    try:
+        import torch
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            info["gpu"] = {"name": props.name, "vram_gb": round(props.total_memory / 1e9, 1), "count": torch.cuda.device_count()}
+    except ImportError:
+        pass
+    return info
+
+
 if __name__ == "__main__":
     from pathlib import Path
     info = set_global_seed(42)
