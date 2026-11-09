@@ -127,10 +127,13 @@ def leakage_safe_family_split(
     """
     Split dataset into train/validation/test by prompt family_id stratified across
     the 4 label quadrants so related prompt families never cross splits.
+    Rows without a creative label (safety-only rows) form their own strata ("<NA>_0", "<NA>_1").
     Verifies zero SHA-256 hash overlap across splits.
     """
     rng = np.random.default_rng(seed)
     out = df.copy()
+    out["creative_label"] = out["creative_label"].astype("Int64")
+    out["safety_label"] = out["safety_label"].astype("Int64")
     out["quadrant"] = out["creative_label"].astype(str) + "_" + out["safety_label"].astype(str)
     out["split"] = "train"
 
@@ -175,6 +178,7 @@ def leakage_safe_family_split(
             "creative1_safety0": int(((sub["creative_label"] == 1) & (sub["safety_label"] == 0)).sum()),
             "creative0_safety1": int(((sub["creative_label"] == 0) & (sub["safety_label"] == 1)).sum()),
             "creative1_safety1": int(((sub["creative_label"] == 1) & (sub["safety_label"] == 1)).sum()),
+            "safety_only_rows": int(sub["creative_label"].isna().sum()),
         }
 
     return out, {

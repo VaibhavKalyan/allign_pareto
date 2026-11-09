@@ -1,0 +1,2 @@
+{"timestamp": "2026-11-09T08:23:11.842610+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Starting M1 pipeline", "data": {"seed": 42, "quick": false}}
+{"timestamp": "2026-11-09T08:43:30.658875+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Completed M1 pipeline", "data": {"macro_f1": 0.7454}}

@@ -1,7 +1,8 @@
 """
 Dual-Head Prompt Classifier Training Pipeline for ALIGN-PARETO (M1).
 Architecture (spec §15):
-  Prompt text -> 384-dim `all-MiniLM-L6-v2` sentence embedding
+  Prompt text -> frozen sentence embedding (all-MiniLM-L6-v2 by default; with `embedding_candidates`
+  set, the encoder and each head's C are chosen on the validation split)
   -> Two independent balanced L2-regularized Logistic Regression heads (`creative_head`, `safety_head`)
   with Platt calibration on the validation split for well-calibrated routing probabilities.
 """
@@ -17,11 +18,13 @@ class SentenceEmbedder:
     Pickles by model name only; the weights are reloaded from the Hugging Face cache on first use.
     """
 
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2", batch_size: int = 256):
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2", batch_size: int = 256, prefix: str = ""):
         self.model_name = model_name
         self.batch_size = batch_size
+        self.prefix = prefix  # e.g. "query: " for e5 models
         self.backend = "sentence_transformers"
         self._model = None
+        self._cache: Dict[str, np.ndarray] = {}  # text -> embedding, so repeated prompts are embedded once
 
     @property
     def model(self):
@@ -36,11 +39,23 @@ class SentenceEmbedder:
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_model"] = None
+        state["_cache"] = {}
         return state
 
+    def __setstate__(self, state):
+        state.setdefault("prefix", "")  # bundles pickled before prefixes existed
+        state.setdefault("_cache", {})
+        self.__dict__.update(state)
+
     def transform(self, texts: List[str]) -> np.ndarray:
-        emb = self.model.encode(texts, batch_size=self.batch_size, show_progress_bar=False, normalize_embeddings=True)
-        return np.asarray(emb, dtype=np.float64)
+        new = list(dict.fromkeys(t for t in texts if t not in self._cache))
+        if new:
+            emb = self.model.encode(
+                [self.prefix + t for t in new], batch_size=self.batch_size, show_progress_bar=False, normalize_embeddings=True
+            )
+            for t, e in zip(new, np.asarray(emb, dtype=np.float64)):
+                self._cache[t] = e
+        return np.stack([self._cache[t] for t in texts]) if texts else np.zeros((0, 0))
 
 
 class BalancedLogisticRegressionHead:
@@ -134,52 +149,116 @@ class BalancedLogisticRegressionHead:
         return (probs >= threshold).astype(int)
 
 
+def _labelled(df, col: str) -> np.ndarray:
+    """Boolean mask of rows that have a label in `col` (safety-only rows have no creative label)."""
+    return df[col].notna().to_numpy()
+
+
+def _make_head(model_cfg: dict, C: float, seed: int) -> "BalancedLogisticRegressionHead":
+    return BalancedLogisticRegressionHead(
+        C=C, max_iter=model_cfg.get("max_iter", 1000), class_weight=model_cfg.get("class_weight", "balanced"), seed=seed
+    )
+
+
+def select_embedder_and_C(train_df, val_df, config: dict, max_candidates: Optional[int] = None) -> Tuple[SentenceEmbedder, Dict[str, float], List[Dict]]:
+    """
+    Choose the sentence encoder and each head's regularization C on the validation split.
+    Each (encoder, head, C) is scored by validation ROC-AUC (threshold-free, and unaffected by Platt
+    scaling); an encoder's score is the mean of its two heads' best ROC-AUCs. The test split is never used.
+    Without `embedding_candidates` in the config, returns the single configured encoder and C.
+    """
+    from src.classifier.evaluate import compute_roc_curve_and_auc
+
+    model_cfg = config.get("model", {})
+    seed = int(config.get("seed", 42))
+    batch_size = int(config["training"]["batch_size"])
+    candidates = model_cfg.get("embedding_candidates") or [
+        {"name": model_cfg.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2"), "prefix": ""}
+    ]
+    if max_candidates:
+        candidates = candidates[:max_candidates]
+    c_grid = [float(c) for c in (model_cfg.get("C_grid") or [model_cfg.get("C", 2.0)])]
+    cols = {"creative": "creative_label", "safety": "safety_label"}
+
+    table, best = [], None
+    for cand in candidates:
+        emb = SentenceEmbedder(cand["name"], batch_size=batch_size, prefix=cand.get("prefix", ""))
+        X_tr = emb.transform(train_df["prompt"].tolist())
+        X_va = emb.transform(val_df["prompt"].tolist())
+        row = {"embedding_model": cand["name"], "prefix": emb.prefix, "embedding_dim": int(X_tr.shape[1]), "val_roc_auc": {}}
+        best_c = {}
+        for head, col in cols.items():
+            m_tr, m_va = _labelled(train_df, col), _labelled(val_df, col)
+            y_tr = train_df[col].to_numpy(dtype=float)[m_tr]
+            y_va = val_df[col].to_numpy(dtype=float)[m_va].astype(int)
+            scores = {}
+            for C in c_grid:
+                h = _make_head(model_cfg, C, seed).fit(X_tr[m_tr], y_tr)
+                scores[C] = round(compute_roc_curve_and_auc(y_va, h.predict_proba(X_va[m_va])[:, 1])[2], 4)
+            best_c[head] = max(scores, key=lambda c: (scores[c], -abs(np.log(c / 2.0))))  # ties -> closest to old C=2
+            row["val_roc_auc"][head] = {str(c): v for c, v in scores.items()}
+        row["best_C"] = best_c
+        # A best C at the end of the grid means the optimum may lie outside it: widen C_grid
+        row["best_C_at_grid_edge"] = {h: c in (min(c_grid), max(c_grid)) for h, c in best_c.items()}
+        row["score_mean_best_val_roc_auc"] = round(float(np.mean([row["val_roc_auc"][h][str(best_c[h])] for h in cols])), 4)
+        table.append(row)
+        if best is None or row["score_mean_best_val_roc_auc"] > best[2]["score_mean_best_val_roc_auc"]:
+            if best is not None:
+                best[0]._cache.clear()
+            best = (emb, best_c, row)
+        else:
+            emb._cache.clear()  # free memory held by losing candidates
+    for row in table:
+        row["selected"] = row is best[2]
+    return best[0], best[1], table
+
+
 def train_dual_head_classifier(
     train_df,
     val_df,
     config: dict,
+    embedder: Optional[SentenceEmbedder] = None,
+    C: Optional[Dict[str, float]] = None,
 ) -> Tuple[SentenceEmbedder, BalancedLogisticRegressionHead, BalancedLogisticRegressionHead, Dict, Dict[str, np.ndarray]]:
     """
     Embed prompts and train independent `creative_head` and `safety_head` classifiers.
-    Also returns the train/val embeddings so callers can tune thresholds without re-embedding.
+    `embedder` and per-head `C` normally come from `select_embedder_and_C`; without them the
+    configured `embedding_model` and `C` are used. Also returns the train/val embeddings so callers
+    can tune thresholds without re-embedding.
     """
     model_cfg = config.get("model", {})
     seed = int(config.get("seed", 42))
-    embedder = SentenceEmbedder(
-        model_name=model_cfg.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2"),
-        batch_size=int(config["training"]["batch_size"]),
-    )
+    if embedder is None:
+        embedder = SentenceEmbedder(
+            model_name=model_cfg.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2"),
+            batch_size=int(config["training"]["batch_size"]),
+        )
+    default_c = float(model_cfg.get("C", 2.0))
+    C = {"creative": default_c, "safety": default_c, **(C or {})}
 
     X_train = embedder.transform(train_df["prompt"].tolist())
     X_val = embedder.transform(val_df["prompt"].tolist())
 
-    y_train_cre = train_df["creative_label"].to_numpy()
-    y_val_cre = val_df["creative_label"].to_numpy()
-
-    y_train_saf = train_df["safety_label"].to_numpy()
-    y_val_saf = val_df["safety_label"].to_numpy()
-
-    creative_head = BalancedLogisticRegressionHead(
-        C=model_cfg.get("C", 2.0),
-        max_iter=model_cfg.get("max_iter", 1000),
-        class_weight=model_cfg.get("class_weight", "balanced"),
-        seed=seed,
-    ).fit(X_train, y_train_cre, X_val, y_val_cre)
-
-    safety_head = BalancedLogisticRegressionHead(
-        C=model_cfg.get("C", 2.0),
-        max_iter=model_cfg.get("max_iter", 1000),
-        class_weight=model_cfg.get("class_weight", "balanced"),
-        seed=seed,
-    ).fit(X_train, y_train_saf, X_val, y_val_saf)
+    # Each head trains (and is Platt-calibrated) only on rows that carry its label
+    heads = {}
+    for head, col in [("creative", "creative_label"), ("safety", "safety_label")]:
+        m_tr, m_va = _labelled(train_df, col), _labelled(val_df, col)
+        heads[head] = _make_head(model_cfg, C[head], seed).fit(
+            X_train[m_tr], train_df[col].to_numpy(dtype=float)[m_tr], X_val[m_va], val_df[col].to_numpy(dtype=float)[m_va]
+        )
+    creative_head, safety_head = heads["creative"], heads["safety"]
 
     train_meta = {
         "embedding_backend": embedder.backend,
+        "embedding_model": embedder.model_name,
+        "embedding_prefix": embedder.prefix,
         "embedding_dim": int(X_train.shape[1]),
+        "C": C,
         "train_samples": int(X_train.shape[0]),
         "val_samples": int(X_val.shape[0]),
+        "creative_head_train_samples": int(_labelled(train_df, "creative_label").sum()),
+        "safety_head_train_samples": int(_labelled(train_df, "safety_label").sum()),
         "creative_platt_scale": [round(creative_head.platt_a_, 4), round(creative_head.platt_b_, 4)],
         "safety_platt_scale": [round(safety_head.platt_a_, 4), round(safety_head.platt_b_, 4)],
     }
     return embedder, creative_head, safety_head, train_meta, {"train": X_train, "val": X_val}
-

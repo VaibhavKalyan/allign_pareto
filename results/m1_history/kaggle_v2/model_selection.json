@@ -1,0 +1,147 @@
+[
+  {
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "prefix": "",
+    "embedding_dim": 384,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.9011,
+        "0.5": 0.9054,
+        "1.0": 0.908,
+        "2.0": 0.9092,
+        "4.0": 0.9098,
+        "8.0": 0.9101
+      },
+      "safety": {
+        "0.25": 0.92,
+        "0.5": 0.9228,
+        "1.0": 0.9246,
+        "2.0": 0.9256,
+        "4.0": 0.9264,
+        "8.0": 0.9269
+      }
+    },
+    "best_C": {
+      "creative": 8.0,
+      "safety": 8.0
+    },
+    "score_mean_best_val_roc_auc": 0.9185,
+    "selected": false
+  },
+  {
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "prefix": "",
+    "embedding_dim": 384,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.907,
+        "0.5": 0.9127,
+        "1.0": 0.9165,
+        "2.0": 0.9184,
+        "4.0": 0.9187,
+        "8.0": 0.9178
+      },
+      "safety": {
+        "0.25": 0.9366,
+        "0.5": 0.941,
+        "1.0": 0.9447,
+        "2.0": 0.9479,
+        "4.0": 0.9502,
+        "8.0": 0.9513
+      }
+    },
+    "best_C": {
+      "creative": 4.0,
+      "safety": 8.0
+    },
+    "score_mean_best_val_roc_auc": 0.935,
+    "selected": false
+  },
+  {
+    "embedding_model": "BAAI/bge-base-en-v1.5",
+    "prefix": "",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.9168,
+        "0.5": 0.9216,
+        "1.0": 0.9251,
+        "2.0": 0.9275,
+        "4.0": 0.9291,
+        "8.0": 0.9296
+      },
+      "safety": {
+        "0.25": 0.9487,
+        "0.5": 0.953,
+        "1.0": 0.9557,
+        "2.0": 0.9574,
+        "4.0": 0.9585,
+        "8.0": 0.9594
+      }
+    },
+    "best_C": {
+      "creative": 8.0,
+      "safety": 8.0
+    },
+    "score_mean_best_val_roc_auc": 0.9445,
+    "selected": false
+  },
+  {
+    "embedding_model": "intfloat/e5-base-v2",
+    "prefix": "query: ",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.904,
+        "0.5": 0.9131,
+        "1.0": 0.9205,
+        "2.0": 0.9262,
+        "4.0": 0.9302,
+        "8.0": 0.9327
+      },
+      "safety": {
+        "0.25": 0.9458,
+        "0.5": 0.9528,
+        "1.0": 0.9571,
+        "2.0": 0.9597,
+        "4.0": 0.9614,
+        "8.0": 0.962
+      }
+    },
+    "best_C": {
+      "creative": 8.0,
+      "safety": 8.0
+    },
+    "score_mean_best_val_roc_auc": 0.9473,
+    "selected": true
+  },
+  {
+    "embedding_model": "thenlper/gte-base",
+    "prefix": "",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.8996,
+        "0.5": 0.907,
+        "1.0": 0.9126,
+        "2.0": 0.9167,
+        "4.0": 0.9192,
+        "8.0": 0.9212
+      },
+      "safety": {
+        "0.25": 0.938,
+        "0.5": 0.9446,
+        "1.0": 0.9493,
+        "2.0": 0.9523,
+        "4.0": 0.954,
+        "8.0": 0.9542
+      }
+    },
+    "best_C": {
+      "creative": 8.0,
+      "safety": 8.0
+    },
+    "score_mean_best_val_roc_auc": 0.9377,
+    "selected": false
+  }
+]

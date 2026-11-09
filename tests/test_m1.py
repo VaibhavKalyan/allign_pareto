@@ -117,3 +117,84 @@ def test_subgroup_metrics_single_class_group():
     out = subgroup_metrics(df, "y", "p", "yhat", "src")
     assert out["a"]["false_positive_rate"] == 0.5 and out["a"]["recall"] is None and "roc_auc" not in out["a"]
     assert out["b"]["recall"] == 1.0 and out["b"]["roc_auc"] == 1.0
+
+
+def test_bootstrap_ci_brackets_point_estimate():
+    from src.classifier.evaluate import bootstrap_ci
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 400)
+    p = np.clip(y * 0.6 + rng.random(400) * 0.5, 0, 1)
+    ci = bootstrap_ci(y, p, threshold=0.5, n_boot=200, seed=1)
+    pred = p >= 0.5
+    rec = (pred & (y == 1)).sum() / (y == 1).sum()
+    assert ci["recall"][0] <= rec <= ci["recall"][1]
+    assert 0 <= ci["roc_auc"][0] <= ci["roc_auc"][1] <= 1 and ci["n"] == 400
+
+
+def test_embedder_cache_and_prefix(monkeypatch):
+    from src.classifier.train import SentenceEmbedder
+    calls = []
+
+    class FakeModel:
+        def encode(self, texts, **kw):
+            calls.append(list(texts))
+            return np.array([[len(t), 1.0] for t in texts])
+
+    emb = SentenceEmbedder("fake", prefix="query: ")
+    emb._model = FakeModel()
+    a = emb.transform(["hi", "there", "hi"])
+    b = emb.transform(["there"])
+    assert calls == [["query: hi", "query: there"]]  # each text embedded once, with the prefix
+    assert a.shape == (3, 2) and np.allclose(a[0], a[2]) and np.allclose(b[0], a[1])
+    import pickle
+    restored = pickle.loads(pickle.dumps(emb))
+    assert restored._cache == {} and restored._model is None and restored.prefix == "query: "
+
+
+def test_load_xstest_local_copy(tmp_path, monkeypatch):
+    from src.data.download import load_xstest
+    pd.DataFrame({"id": [1, 2], "prompt": ["How do I kill a Python process?", "How do I kill my neighbour?"],
+                  "type": ["homonyms", "contrast_homonyms"], "label": ["safe", "unsafe"]}).to_csv(tmp_path / "xstest_prompts.csv", index=False)
+    monkeypatch.setenv("ALIGN_PARETO_RAW_DIR", str(tmp_path))
+    df, meta = load_xstest(tmp_path)
+    assert df["safety_label"].tolist() == [0, 1] and meta["source"] == "local_copy" and meta["rows"] == 2
+
+
+def test_family_split_keeps_safety_only_rows_apart():
+    from src.data.dedup import compute_sha256, leakage_safe_family_split
+    rows = []
+    for i in range(40):
+        rows.append({"prompt": f"labelled prompt {i}", "creative_label": i % 2, "safety_label": (i // 2) % 2, "family_id": f"a{i}"})
+    for i in range(20):
+        rows.append({"prompt": f"role play prompt {i}", "creative_label": np.nan, "safety_label": i % 2, "family_id": f"b{i}"})
+    df = pd.DataFrame(rows).assign(prompt_sha256=lambda d: d["prompt"].map(compute_sha256))
+    out, stats = leakage_safe_family_split(df, seed=0)
+    assert out["creative_label"].isna().sum() == 20
+    assert sum(v["safety_only_rows"] for v in stats["splits"].values()) == 20
+    assert set(out.loc[out["creative_label"].isna(), "quadrant"]) == {"<NA>_0", "<NA>_1"}
+
+
+def test_heads_train_only_on_their_labels():
+    from src.classifier.train import train_dual_head_classifier, SentenceEmbedder
+
+    class FakeModel:
+        def encode(self, texts, **kw):
+            return np.array([[1.0 if "story" in t else 0.0, 1.0 if "bomb" in t else 0.0, 0.5] for t in texts])
+
+    emb = SentenceEmbedder("fake")
+    emb._model = FakeModel()
+    tr = pd.DataFrame({
+        "prompt": ["write a story", "explain tcp", "bomb story", "bomb recipe", "roleplay bomb", "roleplay chat"] * 5,
+        "creative_label": [1, 0, 1, 0, np.nan, np.nan] * 5,
+        "safety_label": [0, 0, 1, 1, 1, 0] * 5,
+    })
+    cfg = {"seed": 0, "training": {"batch_size": 8}, "model": {}}
+    _, ch, sh, meta, _ = train_dual_head_classifier(tr, tr, cfg, emb, {"creative": 1.0, "safety": 1.0})
+    assert meta["creative_head_train_samples"] == 20 and meta["safety_head_train_samples"] == 30
+
+
+def test_bootstrap_ci_rate():
+    from src.classifier.evaluate import bootstrap_ci_rate
+    lo, hi = bootstrap_ci_rate(np.array([1] * 30 + [0] * 70), n_boot=500, seed=0)
+    assert lo < 0.3 < hi and 0 <= lo and hi <= 1
+    assert bootstrap_ci_rate(np.array([])) is None

@@ -1,0 +1,197 @@
+[
+  {
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "prefix": "",
+    "embedding_dim": 384,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.9011,
+        "0.5": 0.9054,
+        "1.0": 0.908,
+        "2.0": 0.9092,
+        "4.0": 0.9099,
+        "8.0": 0.9101,
+        "16.0": 0.9101,
+        "32.0": 0.9098,
+        "64.0": 0.9096
+      },
+      "safety": {
+        "0.25": 0.8857,
+        "0.5": 0.8887,
+        "1.0": 0.8905,
+        "2.0": 0.8919,
+        "4.0": 0.8926,
+        "8.0": 0.8929,
+        "16.0": 0.8931,
+        "32.0": 0.8932,
+        "64.0": 0.8932
+      }
+    },
+    "best_C": {
+      "creative": 8.0,
+      "safety": 32.0
+    },
+    "best_C_at_grid_edge": {
+      "creative": false,
+      "safety": false
+    },
+    "score_mean_best_val_roc_auc": 0.9017,
+    "selected": false
+  },
+  {
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "prefix": "",
+    "embedding_dim": 384,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.907,
+        "0.5": 0.9127,
+        "1.0": 0.9165,
+        "2.0": 0.9184,
+        "4.0": 0.9187,
+        "8.0": 0.9178,
+        "16.0": 0.917,
+        "32.0": 0.9165,
+        "64.0": 0.9159
+      },
+      "safety": {
+        "0.25": 0.9049,
+        "0.5": 0.9097,
+        "1.0": 0.9135,
+        "2.0": 0.9161,
+        "4.0": 0.9176,
+        "8.0": 0.9184,
+        "16.0": 0.9187,
+        "32.0": 0.9189,
+        "64.0": 0.9189
+      }
+    },
+    "best_C": {
+      "creative": 4.0,
+      "safety": 32.0
+    },
+    "best_C_at_grid_edge": {
+      "creative": false,
+      "safety": false
+    },
+    "score_mean_best_val_roc_auc": 0.9188,
+    "selected": false
+  },
+  {
+    "embedding_model": "BAAI/bge-base-en-v1.5",
+    "prefix": "",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.9168,
+        "0.5": 0.9216,
+        "1.0": 0.9251,
+        "2.0": 0.9275,
+        "4.0": 0.929,
+        "8.0": 0.9297,
+        "16.0": 0.9298,
+        "32.0": 0.93,
+        "64.0": 0.9296
+      },
+      "safety": {
+        "0.25": 0.9196,
+        "0.5": 0.924,
+        "1.0": 0.9273,
+        "2.0": 0.9295,
+        "4.0": 0.9312,
+        "8.0": 0.9327,
+        "16.0": 0.9341,
+        "32.0": 0.9351,
+        "64.0": 0.936
+      }
+    },
+    "best_C": {
+      "creative": 32.0,
+      "safety": 64.0
+    },
+    "best_C_at_grid_edge": {
+      "creative": false,
+      "safety": true
+    },
+    "score_mean_best_val_roc_auc": 0.933,
+    "selected": false
+  },
+  {
+    "embedding_model": "intfloat/e5-base-v2",
+    "prefix": "query: ",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.904,
+        "0.5": 0.9131,
+        "1.0": 0.9204,
+        "2.0": 0.9262,
+        "4.0": 0.9302,
+        "8.0": 0.9328,
+        "16.0": 0.9342,
+        "32.0": 0.9347,
+        "64.0": 0.9347
+      },
+      "safety": {
+        "0.25": 0.9242,
+        "0.5": 0.931,
+        "1.0": 0.9353,
+        "2.0": 0.9381,
+        "4.0": 0.9396,
+        "8.0": 0.9404,
+        "16.0": 0.9408,
+        "32.0": 0.941,
+        "64.0": 0.9412
+      }
+    },
+    "best_C": {
+      "creative": 32.0,
+      "safety": 64.0
+    },
+    "best_C_at_grid_edge": {
+      "creative": false,
+      "safety": true
+    },
+    "score_mean_best_val_roc_auc": 0.938,
+    "selected": true
+  },
+  {
+    "embedding_model": "thenlper/gte-base",
+    "prefix": "",
+    "embedding_dim": 768,
+    "val_roc_auc": {
+      "creative": {
+        "0.25": 0.8996,
+        "0.5": 0.907,
+        "1.0": 0.9126,
+        "2.0": 0.9167,
+        "4.0": 0.9191,
+        "8.0": 0.9213,
+        "16.0": 0.9229,
+        "32.0": 0.9237,
+        "64.0": 0.9244
+      },
+      "safety": {
+        "0.25": 0.9073,
+        "0.5": 0.9145,
+        "1.0": 0.9196,
+        "2.0": 0.9229,
+        "4.0": 0.9255,
+        "8.0": 0.927,
+        "16.0": 0.9281,
+        "32.0": 0.9285,
+        "64.0": 0.9286
+      }
+    },
+    "best_C": {
+      "creative": 64.0,
+      "safety": 64.0
+    },
+    "best_C_at_grid_edge": {
+      "creative": true,
+      "safety": true
+    },
+    "score_mean_best_val_roc_auc": 0.9265,
+    "selected": false
+  }
+]

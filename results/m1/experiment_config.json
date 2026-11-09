@@ -13,19 +13,53 @@
       },
       "min_char_len": 15,
       "near_dup_jaccard_threshold": 0.9,
+      "heldout_near_dup_jaccard_threshold": 0.5,
       "family_jaccard_threshold": 0.5,
       "minhash_num_perm": 128,
       "shingle_k": 3,
       "train_ratio": 0.8,
       "val_ratio": 0.1,
       "test_ratio": 0.1,
-      "creative_rule_audit_per_rule": 100
+      "creative_rule_audit_per_rule": 100,
+      "fictional_framing_for_safety_head": true
     },
     "model": {
       "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-      "embedding_dim": 384,
       "classifier": "LogisticRegression",
       "C": 2.0,
+      "embedding_candidates": [
+        {
+          "name": "sentence-transformers/all-MiniLM-L6-v2",
+          "prefix": ""
+        },
+        {
+          "name": "BAAI/bge-small-en-v1.5",
+          "prefix": ""
+        },
+        {
+          "name": "BAAI/bge-base-en-v1.5",
+          "prefix": ""
+        },
+        {
+          "name": "intfloat/e5-base-v2",
+          "prefix": "query: "
+        },
+        {
+          "name": "thenlper/gte-base",
+          "prefix": ""
+        }
+      ],
+      "C_grid": [
+        0.25,
+        0.5,
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0,
+        64.0
+      ],
       "max_iter": 1000,
       "class_weight": "balanced",
       "calibration": "platt"
@@ -35,32 +69,115 @@
       "batch_size": 256
     },
     "inference": {
+      "safety_threshold_objective": "target_recall",
+      "safety_target_recall": 0.95,
       "threshold_grid_min": 0.05,
       "threshold_grid_max": 0.95,
       "threshold_grid_step": 0.01
     },
     "quick_test": {
-      "per_quadrant": 150
+      "per_quadrant": 150,
+      "max_embedding_candidates": 2,
+      "max_extra_seeds": 1
+    },
+    "robustness": {
+      "bootstrap_resamples": 1000,
+      "extra_seeds": [
+        43,
+        44,
+        45,
+        46
+      ]
     }
   },
   "training_meta": {
     "embedding_backend": "sentence_transformers",
-    "embedding_dim": 384,
-    "train_samples": 11211,
-    "val_samples": 1397,
+    "embedding_model": "intfloat/e5-base-v2",
+    "embedding_prefix": "query: ",
+    "embedding_dim": 768,
+    "C": {
+      "creative": 32.0,
+      "safety": 64.0
+    },
+    "train_samples": 17472,
+    "val_samples": 2179,
+    "creative_head_train_samples": 11222,
+    "safety_head_train_samples": 17472,
     "creative_platt_scale": [
-      1.0711,
-      -0.8996
+      0.9239,
+      -0.8099
     ],
     "safety_platt_scale": [
-      1.0081,
-      -0.9052
+      0.9044,
+      -0.5526
     ],
     "thresholds": {
-      "creative": 0.46,
-      "safety": 0.47,
-      "val_f1_creative": 0.7633,
-      "val_f1_safety": 0.7951
+      "creative": 0.42,
+      "val_f1_creative": 0.797,
+      "safety": 0.15,
+      "safety_objective": "target_recall",
+      "safety_target_recall": 0.95,
+      "val_recall_safety": 0.9524,
+      "val_precision_safety": 0.641,
+      "safety_max_f1_threshold": 0.44,
+      "val_f1_safety_at_max_f1_threshold": 0.8209
+    }
+  },
+  "dataset_versions": {
+    "source_mode": "local_copy",
+    "dolly": {
+      "repo": "databricks/databricks-dolly-15k",
+      "file": "databricks-dolly-15k.jsonl",
+      "rows": 15011,
+      "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec",
+      "hf_revision": null
+    },
+    "wildguard_train": {
+      "repo": "allenai/wildguardmix",
+      "file": "train/wildguard_train.parquet",
+      "rows": 86759,
+      "sha256": "02ecea8a724a9146a1e473a95a7cdf262adfe9c7d5408953ca86d2fcfbdc8953",
+      "hf_revision": null
+    },
+    "wildguard_test": {
+      "repo": "allenai/wildguardmix",
+      "file": "test/wildguard_test.parquet",
+      "rows": 1725,
+      "sha256": "6ccc2909c1ae6d41424fac69f1fc32535b1de39cb8f80407d81e8bc64a0bebca",
+      "hf_revision": null
+    },
+    "xstest": {
+      "source": "local_copy",
+      "file": "xstest_prompts.csv",
+      "rows": 450,
+      "sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+      "hf_revision": null
+    }
+  },
+  "environment": {
+    "python": "3.13.16",
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "packages": {
+      "numpy": "2.1.3",
+      "pandas": "2.3.3",
+      "scipy": "1.16.3",
+      "scikit-learn": "1.6.1",
+      "torch": "2.11.0+cu130",
+      "transformers": "5.20.2",
+      "sentence-transformers": "5.7.0",
+      "datasketch": "2.0.0",
+      "huggingface_hub": "1.33.0",
+      "pyarrow": "23.0.1",
+      "matplotlib": "3.10.0",
+      "seaborn": "0.13.2",
+      "peft": "0.21.2",
+      "trl": null,
+      "bitsandbytes": null
+    },
+    "gpu": {
+      "name": "Tesla T4",
+      "vram_gb": 15.6,
+      "count": 2
     }
   }
 }

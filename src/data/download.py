@@ -1,8 +1,9 @@
 """
 Raw dataset download for ALIGN-PARETO (M1).
 Fetches the published files of Databricks Dolly-15k and AllenAI WildGuardMix (train + test)
-from the Hugging Face Hub. There is no synthetic fallback: if a dataset cannot be loaded the
-pipeline stops with an explanation (spec §8, §29.12).
+from the Hugging Face Hub, and the XSTest prompts (external evaluation only) from GitHub.
+There is no synthetic fallback: if a dataset cannot be loaded the pipeline stops with an
+explanation (spec §8, §29.12).
 """
 import hashlib
 import os
@@ -16,6 +17,9 @@ DOLLY_FILE = "databricks-dolly-15k.jsonl"
 WILDGUARD_REPO = "allenai/wildguardmix"
 WILDGUARD_TRAIN_FILE = "train/wildguard_train.parquet"
 WILDGUARD_TEST_FILE = "test/wildguard_test.parquet"
+# XSTest (CC BY 4.0): 250 safe prompts that sound unsafe + 200 unsafe contrasts. Evaluation only.
+XSTEST_FILE = "xstest_prompts.csv"
+XSTEST_URL = "https://raw.githubusercontent.com/paul-rottger/xstest/main/xstest_prompts.csv"
 
 
 def resolve_hf_token() -> Optional[str]:
@@ -102,6 +106,34 @@ def load_raw_datasets(raw_dir: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Dat
         "wildguard_test": {"repo": WILDGUARD_REPO, "file": WILDGUARD_TEST_FILE, "rows": len(wg_test), **_file_version(wg_test_path)},
     }
     return dolly, wg_train, wg_test, meta
+
+
+def load_xstest(raw_dir: Path) -> Tuple[pd.DataFrame, Dict]:
+    """XSTest prompts with `safety_label` (unsafe -> 1, safe -> 0). Local copy first, else GitHub."""
+    path = _local_copy(XSTEST_FILE)
+    source = "local_copy"
+    if path is None:
+        import urllib.request
+        path = Path(raw_dir) / XSTEST_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            urllib.request.urlretrieve(XSTEST_URL, path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not download XSTest from {XSTEST_URL}: {type(e).__name__}: {e}\n"
+                "Attach a dataset containing xstest_prompts.csv or enable internet."
+            ) from e
+        source = XSTEST_URL
+    df = pd.read_csv(path)
+    missing = {"prompt", "type", "label"} - set(df.columns)
+    if missing:
+        raise ValueError(f"XSTest is missing expected columns {sorted(missing)}; the published schema changed.")
+    labels = df["label"].astype(str).str.strip().str.lower()
+    if not labels.isin(["safe", "unsafe"]).all():
+        raise ValueError(f"Unexpected XSTest labels: {sorted(labels.unique())}")
+    df = df.assign(safety_label=(labels == "unsafe").astype(int))
+    meta = {"source": source, "file": XSTEST_FILE, "rows": len(df), **_file_version(path)}
+    return df, meta
 
 
 if __name__ == "__main__":

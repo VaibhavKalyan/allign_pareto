@@ -1,0 +1,158 @@
+{
+  "raw_metadata": {
+    "source_mode": "local_copy",
+    "dolly": {
+      "repo": "databricks/databricks-dolly-15k",
+      "file": "databricks-dolly-15k.jsonl",
+      "rows": 15011,
+      "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec",
+      "hf_revision": null
+    },
+    "wildguard_train": {
+      "repo": "allenai/wildguardmix",
+      "file": "train/wildguard_train.parquet",
+      "rows": 86759,
+      "sha256": "02ecea8a724a9146a1e473a95a7cdf262adfe9c7d5408953ca86d2fcfbdc8953",
+      "hf_revision": null
+    },
+    "wildguard_test": {
+      "repo": "allenai/wildguardmix",
+      "file": "test/wildguard_test.parquet",
+      "rows": 1725,
+      "sha256": "6ccc2909c1ae6d41424fac69f1fc32535b1de39cb8f80407d81e8bc64a0bebca",
+      "hf_revision": null
+    }
+  },
+  "cleaning_stats": {
+    "initial_rows": 62863,
+    "removed_empty_or_short": 508,
+    "removed_benchmark_overlap": 1,
+    "remaining_after_cleaning": 62354
+  },
+  "exact_duplicates_removed": 275,
+  "unassigned_label_stats": {
+    "rows_before": 62079,
+    "removed_unassigned": 10553,
+    "removed_by_reason": {
+      "dolly/uncertain_dolly_creative_writing_question": 298,
+      "dolly/unmapped_dolly_category": 2073,
+      "wildguardmix/rule_no_creative_cue": 15,
+      "wildguardmix/uncertain_fictional_framing_only": 7852,
+      "wildguardmix/uncertain_narrative_without_fiction_context": 315
+    },
+    "removed_missing_safety": 15
+  },
+  "wildguardtest_near_duplicates_removed": {
+    "threshold": 0.5,
+    "labelled_pool": 16,
+    "fictional_framing_pool": 0
+  },
+  "labelled_pool_before_sampling": {
+    "pearson_r": 0.0624,
+    "abs_pearson_r_below_0_2": true,
+    "chi2_statistic": 200.5432,
+    "chi2_p_value": 1.5896013563509706e-45,
+    "quadrant_counts": {
+      "creative0_safety0": 26133,
+      "creative0_safety1": 16653,
+      "creative1_safety0": 4616,
+      "creative1_safety1": 4108
+    },
+    "all_four_quadrants_present": true
+  },
+  "sampling_report": {
+    "creative0_safety0": {
+      "target": 7000,
+      "available": 26133,
+      "selected": {
+        "dolly": 3500,
+        "wildguardmix": 3500
+      }
+    },
+    "creative1_safety0": {
+      "target": 3000,
+      "available": 4616,
+      "selected": {
+        "dolly": 1500,
+        "wildguardmix": 1500
+      }
+    },
+    "creative0_safety1": {
+      "target": 3000,
+      "available": 16653,
+      "selected": {
+        "wildguardmix": 3000
+      }
+    },
+    "creative1_safety1": {
+      "target": 1000,
+      "available": 4108,
+      "selected": {
+        "wildguardmix": 1000
+      }
+    }
+  },
+  "near_duplicates_removed": 4,
+  "family_stats": {
+    "family_threshold": 0.5,
+    "n_families": 13721,
+    "n_multi_prompt_families": 87,
+    "largest_family_size": 87
+  },
+  "independence_check": {
+    "pearson_r": -0.0499,
+    "abs_pearson_r_below_0_2": true,
+    "chi2_statistic": 34.6443,
+    "chi2_p_value": 3.957889561730501e-09,
+    "quadrant_counts": {
+      "creative0_safety0": 6998,
+      "creative0_safety1": 2998,
+      "creative1_safety0": 3000,
+      "creative1_safety1": 1000
+    },
+    "all_four_quadrants_present": true
+  },
+  "split_stats": {
+    "splits": {
+      "train": {
+        "total": 11205,
+        "creative0_safety0": 5603,
+        "creative1_safety0": 2403,
+        "creative0_safety1": 2399,
+        "creative1_safety1": 800
+      },
+      "validation": {
+        "total": 1395,
+        "creative0_safety0": 698,
+        "creative1_safety0": 298,
+        "creative0_safety1": 300,
+        "creative1_safety1": 99
+      },
+      "test": {
+        "total": 1396,
+        "creative0_safety0": 697,
+        "creative1_safety0": 299,
+        "creative0_safety1": 299,
+        "creative1_safety1": 101
+      }
+    },
+    "exact_hash_leakage_count": 0,
+    "family_cluster_leakage_count": 0
+  },
+  "source_by_quadrant": {
+    "0_0/dolly": 3498,
+    "0_0/wildguardmix": 3500,
+    "0_1/wildguardmix": 2998,
+    "1_0/dolly": 1500,
+    "1_0/wildguardmix": 1500,
+    "1_1/wildguardmix": 1000
+  },
+  "source_by_split": {
+    "test/dolly": 515,
+    "test/wildguardmix": 881,
+    "train/dolly": 3992,
+    "train/wildguardmix": 7213,
+    "validation/dolly": 491,
+    "validation/wildguardmix": 904
+  }
+}

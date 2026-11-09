@@ -356,3 +356,46 @@ def subgroup_metrics(df: pd.DataFrame, label_col: str, prob_col: str, pred_col: 
             row["roc_auc"] = round(compute_roc_curve_and_auc(y, sub[prob_col].to_numpy(dtype=float))[2], 4)
         out[str(g)] = row
     return out
+
+
+def bootstrap_ci(y_true: np.ndarray, y_prob: np.ndarray, threshold: float, n_boot: int = 1000, seed: int = 42, alpha: float = 0.05) -> Dict:
+    """
+    95% (by default) percentile bootstrap intervals over prompts for precision, recall, F1, and ROC-AUC
+    at a fixed threshold. Resamples where a class is missing are skipped for ROC-AUC.
+    """
+    y_true = np.asarray(y_true, dtype=int)
+    y_prob = np.asarray(y_prob, dtype=float)
+    rng = np.random.default_rng(seed)
+    n = len(y_true)
+    stats = {"precision": [], "recall": [], "f1": [], "roc_auc": []}
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, n)
+        y, p = y_true[idx], y_prob[idx]
+        pred = p >= threshold
+        tp = int(np.sum(pred & (y == 1)))
+        n_pred, n_pos = int(pred.sum()), int((y == 1).sum())
+        prec = tp / n_pred if n_pred else np.nan
+        rec = tp / n_pos if n_pos else np.nan
+        stats["precision"].append(prec)
+        stats["recall"].append(rec)
+        stats["f1"].append(2 * prec * rec / (prec + rec) if n_pred and n_pos and (prec + rec) > 0 else np.nan)
+        stats["roc_auc"].append(compute_roc_curve_and_auc(y, p)[2] if 0 < n_pos < n else np.nan)
+    lo, hi = 100 * alpha / 2, 100 * (1 - alpha / 2)
+    out = {}
+    for k, v in stats.items():
+        v = np.asarray(v, dtype=float)
+        v = v[~np.isnan(v)]
+        out[k] = [round(float(np.percentile(v, lo)), 4), round(float(np.percentile(v, hi)), 4)] if len(v) else None
+    out["n"] = n
+    out["n_boot"] = n_boot
+    return out
+
+
+def bootstrap_ci_rate(flags: np.ndarray, n_boot: int = 1000, seed: int = 42, alpha: float = 0.05):
+    """Percentile bootstrap interval for a rate (mean of 0/1 flags), e.g. the false-alarm rate."""
+    flags = np.asarray(flags, dtype=float)
+    if len(flags) == 0:
+        return None
+    rng = np.random.default_rng(seed)
+    means = flags[rng.integers(0, len(flags), (n_boot, len(flags)))].mean(axis=1)
+    return [round(float(np.percentile(means, 100 * alpha / 2)), 4), round(float(np.percentile(means, 100 * (1 - alpha / 2))), 4)]

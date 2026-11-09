@@ -21,11 +21,25 @@ data:
   val_ratio: 0.1
   test_ratio: 0.1
   creative_rule_audit_per_rule: 100
+  # Role-play / "imagine" prompts have no creative label but a known safety label. When true they join the
+  # family-safe split and train the safety head only (never the creative head); their test portion is the
+  # fictional-framing evaluation slice. They are mostly adversarial, which is where false alarms concentrate.
+  fictional_framing_for_safety_head: true
 model:
+  # Fallback encoder/C when embedding_candidates / C_grid are not set
   embedding_model: sentence-transformers/all-MiniLM-L6-v2
-  embedding_dim: 384
   classifier: LogisticRegression
   C: 2.0
+  # Encoder and per-head C are chosen on the validation split by ROC-AUC (spec §15: compare after baseline).
+  # `prefix` is prepended to every prompt (e5 models expect "query: ").
+  embedding_candidates:
+    - {name: sentence-transformers/all-MiniLM-L6-v2, prefix: ""}
+    - {name: BAAI/bge-small-en-v1.5, prefix: ""}
+    - {name: BAAI/bge-base-en-v1.5, prefix: ""}
+    - {name: intfloat/e5-base-v2, prefix: "query: "}
+    - {name: thenlper/gte-base, prefix: ""}
+  # Run 2 picked C=8 (the old maximum) for every encoder, so the grid now goes higher
+  C_grid: [0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
   max_iter: 1000
   class_weight: balanced
   calibration: platt
@@ -46,3 +60,10 @@ inference:
 quick_test:
   # Used by `run_m1(quick=True)` for local smoke tests only; never for reported results.
   per_quadrant: 150
+  max_embedding_candidates: 2
+  max_extra_seeds: 1
+robustness:
+  # 95% percentile bootstrap intervals over prompts for the reported test metrics
+  bootstrap_resamples: 1000
+  # Re-sample, re-split and re-train with these seeds (same encoder and C) to show run-to-run spread
+  extra_seeds: [43, 44, 45, 46]
