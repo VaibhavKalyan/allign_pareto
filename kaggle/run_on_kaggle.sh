@@ -58,7 +58,8 @@ log "Run page: https://www.kaggle.com/code/$KERNEL"
 
 # 3. Wait, then download
 while true; do
-    STATUS=$("$KAGGLE" kernels status "$KERNEL" 2>&1 | tr '[:upper:]' '[:lower:]')
+    # `|| true`: under `set -e` one failed status call (network, rate limit) would otherwise end the watcher silently
+    STATUS=$("$KAGGLE" kernels status "$KERNEL" 2>&1 | tr '[:upper:]' '[:lower:]' || true)
     case $STATUS in
         *status.complete*) log "Run complete"; break ;;
         *status.error*|*status.cancel*) log "Run failed: $STATUS"; FAILED=1; break ;;   # not transient CLI errors
