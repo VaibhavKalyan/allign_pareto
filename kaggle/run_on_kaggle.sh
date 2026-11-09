@@ -27,12 +27,20 @@ if [[ $SKIP_UPLOAD != --skip-upload ]]; then
     cp -r "$ROOT/src" "$ROOT/configs" "$STAGE/src-dataset/"
     mkdir -p "$STAGE/src-dataset/data" && cp -r "$ROOT/data/eval" "$STAGE/src-dataset/data/"
     find "$STAGE/src-dataset" -name __pycache__ -prune -exec rm -rf {} +
+    find "$STAGE/src-dataset" -name '.~lock*' -delete   # LibreOffice lock files break the upload
     VERSION_MSG="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD -- src configs data/eval requirements.txt || echo '+local-changes')"
     log "Uploading $SRC_DATASET ($VERSION_MSG)"
+    UPLOAD_START=$(date -u +"%Y-%m-%d %H:%M:%S")
     "$KAGGLE" datasets version -p "$STAGE/src-dataset" -m "$VERSION_MSG" -r zip
-    until "$KAGGLE" datasets status "$SRC_DATASET" 2>/dev/null | grep -qi ready; do
-        log "Waiting for $SRC_DATASET to finish processing"; sleep 15
+    # `datasets status` reports the previous version as ready while the new one is processing, so wait until
+    # the listed files carry a creation time after this upload
+    for _ in $(seq 40); do
+        NEWEST=$("$KAGGLE" datasets files "$SRC_DATASET" --page-size 200 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}' | sort | tail -1)
+        [[ -n $NEWEST && $NEWEST > $UPLOAD_START ]] && break
+        log "Waiting for the new $SRC_DATASET version (latest files from ${NEWEST:-?})"; sleep 15
     done
+    [[ -n $NEWEST && $NEWEST > $UPLOAD_START ]] || { echo "New $SRC_DATASET version did not appear; check https://www.kaggle.com/datasets/$SRC_DATASET"; exit 1; }
+    log "New $SRC_DATASET version is live"
 fi
 
 # 2. Kernel
