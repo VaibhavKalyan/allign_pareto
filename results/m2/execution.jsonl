@@ -1,0 +1,6 @@
+{"timestamp": "2026-11-09T09:31:59.725349+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Starting M2 pipeline", "data": {"seed": 42, "quick": false, "cuda": true}}
+{"timestamp": "2026-11-09T09:32:28.978413+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Preference pairs ready", "data": {"train_pairs_used": 4389, "eval_pairs_used": 265, "dropped_over_length": {"train": 611, "eval": 35}}}
+{"timestamp": "2026-11-09T10:01:00.741273+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "DPO training finished", "data": {"minutes": 28.5, "eval_loss": 0.6719986200332642}}
+{"timestamp": "2026-11-09T10:01:03.409587+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Adapter reload check", "data": {"max_abs_logit_diff_trained_vs_reloaded": 0.046875, "max_abs_logit_diff_lambda0_vs_base": 0.0, "max_abs_logit_diff_lambda1_vs_base": 4.557617}}
+{"timestamp": "2026-11-09T10:03:47.592604+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Smoke test", "data": {"n": 8, "share_different": 1.0}}
+{"timestamp": "2026-11-09T10:03:47.624415+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Completed M2 pipeline", "data": {"train_loss": {"first": 0.6909, "last": 0.6704}, "share_different": 1.0}}

@@ -1,0 +1,48 @@
+{
+  "quick_test": false,
+  "trained_this_run": true,
+  "train_minutes": 31.3,
+  "train_steps": 275,
+  "train_loss": {
+    "first": 0.6909,
+    "last": 0.6704
+  },
+  "train_reward_accuracy": {
+    "first": 0.4688,
+    "last": 0.6229
+  },
+  "train_reward_margin": {
+    "first": 0.0125,
+    "last": 0.1142
+  },
+  "final_eval": {
+    "eval_loss": 0.672,
+    "eval_entropy": 1.795,
+    "eval_num_tokens": 1208286.0,
+    "eval_logits/chosen": -2.6041,
+    "eval_logits/rejected": -2.586,
+    "eval_mean_token_accuracy": 0.393,
+    "eval_rewards/chosen": -0.1388,
+    "eval_rewards/rejected": -0.2369,
+    "eval_rewards/accuracies": 0.5821,
+    "eval_rewards/margins": 0.0981,
+    "eval_logps/chosen": -118.4138,
+    "eval_logps/rejected": -131.1963
+  },
+  "reload_check": {
+    "max_abs_logit_diff_trained_vs_reloaded": 0.046875,
+    "max_abs_logit_diff_lambda0_vs_base": 0.0,
+    "max_abs_logit_diff_lambda1_vs_base": 4.557617
+  },
+  "smoke_test": {
+    "n_prompts": 8,
+    "share_replies_different": 1.0,
+    "by_quadrant": {
+      "0_0": 1.0,
+      "0_1": 1.0,
+      "1_0": 1.0,
+      "1_1": 1.0
+    }
+  },
+  "quantized_4bit": true
+}

@@ -1,0 +1,149 @@
+{
+  "m2_config": {
+    "experiment_name": "align_pareto_m2_qlora_dpo",
+    "seed": 42,
+    "model": {
+      "base_model_name": "Qwen/Qwen3-0.6B",
+      "use_4bit_qlora": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "float16",
+      "bnb_4bit_use_double_quant": true,
+      "enable_thinking": false
+    },
+    "lora": {
+      "r": 16,
+      "lora_alpha": 32,
+      "lora_dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ],
+      "task_type": "CAUSAL_LM"
+    },
+    "dpo": {
+      "dataset": "Anthropic/hh-rlhf",
+      "train_pairs": {
+        "harmless-base": 3500,
+        "helpful-base": 1500
+      },
+      "eval_pairs": {
+        "harmless-base": 200,
+        "helpful-base": 100
+      },
+      "beta": 0.1,
+      "loss_type": "sigmoid",
+      "learning_rate": 5e-05,
+      "num_train_epochs": 1,
+      "per_device_train_batch_size": 4,
+      "gradient_accumulation_steps": 4,
+      "max_length": 512,
+      "max_prompt_length": 256,
+      "warmup_ratio": 0.1,
+      "logging_steps": 10,
+      "eval_steps": 50,
+      "save_steps": 100
+    },
+    "smoke_test": {
+      "prompts_per_quadrant": 2,
+      "max_new_tokens": 128
+    },
+    "quick_test": {
+      "train_pairs": 32,
+      "eval_pairs": 8,
+      "max_steps": 3,
+      "max_length": 256,
+      "max_prompt_length": 128
+    },
+    "lambda_interpolation": {
+      "formula": "W_lambda = W_base + lambda * (alpha / r) * (B @ A)",
+      "default_grid": [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0
+      ]
+    }
+  },
+  "data": {
+    "dataset": "Anthropic/hh-rlhf",
+    "files": {
+      "harmless-base/train.jsonl.gz": {
+        "usable_pairs": 42308,
+        "sampled": 3500,
+        "sha256": "bf3e1ecd3db61bf21d190f69351d26670c67aababa0fd282fa008c17a7202217",
+        "hf_revision": "09be8c5bbc57cb3887f3a9732ad6aa7ec602a1fa"
+      },
+      "helpful-base/train.jsonl.gz": {
+        "usable_pairs": 43614,
+        "sampled": 1500,
+        "sha256": "518a5bf288456fc9f3b7c980c54116fba0c52f274d3f4d344675d83e4058f6f4",
+        "hf_revision": "09be8c5bbc57cb3887f3a9732ad6aa7ec602a1fa"
+      },
+      "harmless-base/test.jsonl.gz": {
+        "usable_pairs": 2299,
+        "sampled": 200,
+        "sha256": "ebfaaed21162a4de120ae85366075b34425e2a6303fac59b99555002f7016f03",
+        "hf_revision": "09be8c5bbc57cb3887f3a9732ad6aa7ec602a1fa"
+      },
+      "helpful-base/test.jsonl.gz": {
+        "usable_pairs": 2338,
+        "sampled": 100,
+        "sha256": "8be3fc1a13b27901631696f2be6f184c799f1baeaf145f53ac5db24960adc37b",
+        "hf_revision": "09be8c5bbc57cb3887f3a9732ad6aa7ec602a1fa"
+      }
+    },
+    "dropped": {
+      "harmless-base/train.jsonl.gz": {
+        "unparseable": 193,
+        "eval_prompt_overlap": 36
+      },
+      "helpful-base/train.jsonl.gz": {
+        "unparseable": 216,
+        "eval_prompt_overlap": 5
+      },
+      "harmless-base/test.jsonl.gz": {
+        "unparseable": 12,
+        "eval_prompt_overlap": 1
+      },
+      "helpful-base/test.jsonl.gz": {
+        "unparseable": 15,
+        "eval_prompt_overlap": 1
+      }
+    },
+    "train_pairs_used": 4389,
+    "eval_pairs_used": 265,
+    "dropped_over_length": {
+      "train": 611,
+      "eval": 35
+    }
+  },
+  "environment": {
+    "python": "3.13.16",
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "packages": {
+      "numpy": "2.1.3",
+      "pandas": "2.3.3",
+      "scipy": "1.16.3",
+      "scikit-learn": "1.6.1",
+      "torch": "2.11.0+cu130",
+      "transformers": "5.22.2",
+      "sentence-transformers": "5.7.0",
+      "datasketch": null,
+      "huggingface_hub": "1.33.0",
+      "pyarrow": "23.0.1",
+      "matplotlib": "3.10.0",
+      "seaborn": "0.13.2",
+      "peft": "0.21.2",
+      "trl": "1.17.1",
+      "bitsandbytes": "0.50.2"
+    },
+    "gpu": {
+      "name": "Tesla T4",
+      "vram_gb": 15.6,
+      "count": 1
+    }
+  }
+}
