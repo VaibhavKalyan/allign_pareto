@@ -59,11 +59,17 @@ already safety-trained.
 ### M3: λ sweep + Pareto frontier (§22–24, §35)
 Two axes only (team decision): **safety** and **creativity**. Capability (§22) and uncertainty (§25) are
 left out; they are not in the §35 "must work" list. Diversity is kept as the way creativity is measured (§23–24).
+
+Models (`configs/evaluation.yaml` → `models`, details in [`docs/EVAL_PROTOCOL.md`](docs/EVAL_PROTOCOL.md)):
+`sft-helpful-only` (= λ = 0, unaligned baseline), `sft-dpo` at each λ (Group A), and `qwen3-instruct`
+(`Qwen/Qwen3-0.6B`, an existing aligned model, run by Group B). The raw `Qwen3-0.6B-Base` is not evaluated: it cannot
+follow the chat format. Group B compares `qwen3-instruct` with Group A's λ = 0 responses.
 | Step | File | State |
 |---|---|---|
 | Safety: harmful refusal rate, benign false-refusal rate | `src/evaluation/safety.py` | to write |
 | Creativity on creative prompts: diversity (1 − mean pairwise cosine), semantic cluster count, novelty | `src/evaluation/creativity.py` | to write |
 | Shared eval prompt set (400 prompts from M1 val/test) + protocol for Group B | `src/evaluation/build_eval_set.py`, `docs/EVAL_PROTOCOL.md` | done |
+| Publish the M2 adapters as Kaggle dataset `align-pareto-m2-adapters` (M3 + Group B input) | `kaggle/publish_adapters.sh` | run after M2 |
 | N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
 
 ### M4: Adaptive controller (§20)
