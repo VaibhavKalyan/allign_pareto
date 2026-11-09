@@ -1,0 +1,15 @@
+{
+  "minutes": 60.6,
+  "eval_loss": 0.6010552644729614,
+  "eval_entropy": 1.8294488498658845,
+  "eval_num_tokens": 2413058.0,
+  "eval_logits/chosen": 1.2456578260583804,
+  "eval_logits/rejected": 1.3719017668137536,
+  "eval_mean_token_accuracy": 0.4211173974203341,
+  "eval_rewards/chosen": -2.0407108465830484,
+  "eval_rewards/rejected": -2.777322966040987,
+  "eval_rewards/accuracies": 0.6856060606060606,
+  "eval_rewards/margins": 0.7366121050083276,
+  "eval_logps/chosen": -105.44299784573641,
+  "eval_logps/rejected": -130.0849195538145
+}
