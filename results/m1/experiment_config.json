@@ -13,6 +13,7 @@
       },
       "min_char_len": 15,
       "near_dup_jaccard_threshold": 0.9,
+      "heldout_near_dup_jaccard_threshold": 0.5,
       "family_jaccard_threshold": 0.5,
       "minhash_num_perm": 128,
       "shingle_k": 3,
@@ -35,6 +36,8 @@
       "batch_size": 256
     },
     "inference": {
+      "safety_threshold_objective": "target_recall",
+      "safety_target_recall": 0.95,
       "threshold_grid_min": 0.05,
       "threshold_grid_max": 0.95,
       "threshold_grid_step": 0.01
@@ -46,21 +49,72 @@
   "training_meta": {
     "embedding_backend": "sentence_transformers",
     "embedding_dim": 384,
-    "train_samples": 11211,
-    "val_samples": 1397,
+    "train_samples": 11205,
+    "val_samples": 1395,
     "creative_platt_scale": [
-      1.0711,
-      -0.8996
+      0.9631,
+      -0.8738
     ],
     "safety_platt_scale": [
-      1.0081,
-      -0.9052
+      1.071,
+      -0.9074
     ],
     "thresholds": {
-      "creative": 0.46,
-      "safety": 0.47,
-      "val_f1_creative": 0.7633,
-      "val_f1_safety": 0.7951
+      "creative": 0.32,
+      "val_f1_creative": 0.7479,
+      "safety": 0.13,
+      "safety_objective": "target_recall",
+      "safety_target_recall": 0.95,
+      "val_recall_safety": 0.9524,
+      "val_precision_safety": 0.5882,
+      "safety_max_f1_threshold": 0.45,
+      "val_f1_safety_at_max_f1_threshold": 0.7652
     }
+  },
+  "dataset_versions": {
+    "source_mode": "local_copy",
+    "dolly": {
+      "repo": "databricks/databricks-dolly-15k",
+      "file": "databricks-dolly-15k.jsonl",
+      "rows": 15011,
+      "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec",
+      "hf_revision": null
+    },
+    "wildguard_train": {
+      "repo": "allenai/wildguardmix",
+      "file": "train/wildguard_train.parquet",
+      "rows": 86759,
+      "sha256": "02ecea8a724a9146a1e473a95a7cdf262adfe9c7d5408953ca86d2fcfbdc8953",
+      "hf_revision": null
+    },
+    "wildguard_test": {
+      "repo": "allenai/wildguardmix",
+      "file": "test/wildguard_test.parquet",
+      "rows": 1725,
+      "sha256": "6ccc2909c1ae6d41424fac69f1fc32535b1de39cb8f80407d81e8bc64a0bebca",
+      "hf_revision": null
+    }
+  },
+  "environment": {
+    "python": "3.13.18",
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "packages": {
+      "numpy": "2.1.3",
+      "pandas": "2.3.3",
+      "scipy": "1.16.3",
+      "scikit-learn": "1.6.1",
+      "torch": "2.11.0+cpu",
+      "transformers": "5.20.2",
+      "sentence-transformers": "5.7.0",
+      "datasketch": "2.0.0",
+      "huggingface_hub": "1.33.0",
+      "pyarrow": "23.0.1",
+      "matplotlib": "3.10.0",
+      "seaborn": "0.13.2",
+      "peft": "0.21.2",
+      "trl": null,
+      "bitsandbytes": null
+    },
+    "gpu": null
   }
 }

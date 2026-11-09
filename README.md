@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 code revised (label rules, leakage, safety threshold, reporting); `results/m1/` is from the previous code and must be re-run on Kaggle. M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -36,7 +36,7 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 | Metrics, confusion matrices, calibration, val-tuned thresholds (safety: recall-first), per-source breakdowns | `src/classifier/evaluate.py` | done |
 | Orchestrator (+ WildGuardTest external eval, fictional-framing eval slice, error analysis, audit files) | `src/run_m1.py` | done |
 | Unit tests for label rules, leakage filter, thresholds (`pytest tests`) | `tests/test_m1.py` | done |
-| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | re-run needed (code changed after v3) |
+| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | done (run with `kaggle/run_on_kaggle.sh m1`) |
 | Hand-check creative labels (fill `human_creative_label`) | `results/m1/creative_rule_audit.csv`, `results/m1/fictional_framing_predictions.csv` | to do (team) |
 | Decide whether Dolly `brainstorming` (mostly lists/recommendations) and `creative_writing` letters/emails count as creative | `docs/ANNOTATION_GUIDE.md` | to do (team) |
 
@@ -82,4 +82,5 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 python3 run_all.py --verify-only   # check files
 python3 run_all.py                 # run implemented milestones
 pytest tests                       # unit tests (no data download needed)
+kaggle/run_on_kaggle.sh m1         # upload code, run the M1 notebook on Kaggle, copy results back
 ```
