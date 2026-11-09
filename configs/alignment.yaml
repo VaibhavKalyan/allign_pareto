@@ -1,14 +1,16 @@
-experiment_name: align_pareto_m2_qlora_dpo
+experiment_name: align_pareto_m2_sft_dpo
 seed: 42
 model:
-  # Already instruction-tuned; the raw pretrained model is Qwen/Qwen3-0.6B-Base (see docs/EVAL_PROTOCOL.md)
-  base_model_name: Qwen/Qwen3-0.6B
-  use_4bit_qlora: true                # ignored without a CUDA GPU (bitsandbytes needs one)
-  bnb_4bit_quant_type: nf4
-  bnb_4bit_compute_dtype: float16     # Kaggle T4/P100 have no bfloat16 support
-  bnb_4bit_use_double_quant: true
+  # Pretrained only (no chat or safety training). Stage 1 (SFT) makes it a helpful-only chat model (lambda = 0);
+  # stage 2 (DPO) adds the safety alignment (lambda = 1).
+  base_model_name: Qwen/Qwen3-0.6B-Base
+  # Chat template and <|im_end|> end-of-reply token; same vocabulary as the base model
+  tokenizer_name: Qwen/Qwen3-0.6B
   enable_thinking: false              # Qwen3 chat template; must match configs/evaluation.yaml
-lora:
+  # Full-precision weights, fp16 autocast during training. A 0.6B model fits a T4 without 4-bit quantization,
+  # so the SFT adapter merges exactly and M3 / Group B evaluate the same unquantized weights.
+  dtype: float32
+lora:                                 # same adapter shape for both stages
   r: 16
   lora_alpha: 32
   lora_dropout: 0.05
@@ -17,21 +19,35 @@ lora:
   - k_proj
   - v_proj
   - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
   task_type: CAUSAL_LM
+sft:
+  dataset: Anthropic/hh-rlhf          # chosen replies; no fallback dataset
+  train_examples:                     # helpful-base: helpful replies, never trained for harmlessness
+    helpful-base: 8000
+  eval_examples:
+    helpful-base: 300
+  learning_rate: 2.0e-04
+  num_train_epochs: 1
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  max_length: 512                     # longer examples are dropped, not truncated
+  warmup_ratio: 0.03
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 200
 dpo:
-  dataset: Anthropic/hh-rlhf          # no fallback dataset: a load failure stops the run
-  # Pairs sampled per hh-rlhf subset. Mostly harmlessness, since M3 measures what safety alignment
-  # costs; some helpfulness so the model is not trained only to refuse.
-  train_pairs:
-    harmless-base: 3500
-    helpful-base: 1500
-  eval_pairs:                         # from the hh-rlhf test files
-    harmless-base: 200
-    helpful-base: 100
+  dataset: Anthropic/hh-rlhf          # chosen vs rejected; no fallback dataset
+  train_pairs:                        # harmless-base only: this stage is the safety alignment
+    harmless-base: 5000
+  eval_pairs:
+    harmless-base: 300
   beta: 0.1
   loss_type: sigmoid
   learning_rate: 5.0e-05
-  num_train_epochs: 1                 # start with 1 (README); raise only if the reward margin is still climbing
+  num_train_epochs: 2
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
   max_length: 512                     # pairs longer than this are dropped, not truncated
@@ -41,17 +57,17 @@ dpo:
   eval_steps: 50
   save_steps: 100
 smoke_test:
-  prompts_per_quadrant: 2             # from the validation split of data/eval/eval_prompts.csv
+  prompts_per_quadrant: 4             # from the validation split of data/eval/eval_prompts.csv
   max_new_tokens: 128
 quick_test:
   # Used by `run_m2(quick=True)` for smoke tests only; never for reported results.
-  train_pairs: 32
-  eval_pairs: 8
+  train_examples: 32
+  eval_examples: 8
   max_steps: 3
   max_length: 256
   max_prompt_length: 128
 lambda_interpolation:
-  formula: W_lambda = W_base + lambda * (alpha / r) * (B @ A)
+  formula: W_lambda = W_sft + lambda * (alpha / r) * (B @ A)
   default_grid:
   - 0.0
   - 0.25

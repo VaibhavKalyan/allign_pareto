@@ -1,7 +1,8 @@
 """
-DPO preference pairs for ALIGN-PARETO (M2, spec §18).
+hh-rlhf data for both M2 stages (spec §18): SFT examples and DPO preference pairs.
 Loads Anthropic/hh-rlhf transcripts and turns each pair into (prompt messages, chosen reply, rejected reply).
 The prompt is the shared conversation up to the last assistant turn; the replies are that last turn.
+SFT uses (prompt, chosen reply) only.
 No fallback dataset: if hh-rlhf cannot be loaded the pipeline stops (spec §29.12).
 """
 import re
@@ -63,31 +64,51 @@ def to_pairs(raw: pd.DataFrame, subset: str, excluded_prompts: frozenset = froze
     return pd.DataFrame(rows), dropped
 
 
-def load_preference_pairs(cfg: Dict, raw_dir: Path, eval_prompts_path: Optional[Path] = None) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
-    """Return (train_pairs, eval_pairs, provenance) sampled per hh-rlhf subset as set in configs/alignment.yaml."""
+def eval_prompt_set(eval_prompts_path: Optional[Path]) -> frozenset:
+    """Normalized evaluation prompts; hh-rlhf conversations that start with one are never trained on."""
+    if eval_prompts_path is None or not Path(eval_prompts_path).exists():
+        return frozenset()
+    return frozenset(_normalize(p) for p in pd.read_csv(eval_prompts_path)["prompt"])
+
+
+def load_hh_pairs(counts: Dict[str, int], split: str, raw_dir: Path, excluded: frozenset, seed: int, meta: Dict) -> pd.DataFrame:
+    """Sample `counts[subset]` usable pairs from each hh-rlhf `<subset>/<split>.jsonl.gz`; provenance goes into `meta`."""
     from huggingface_hub import hf_hub_download
     from src.data.download import _file_version
 
-    dcfg = cfg["dpo"]
-    seed = int(cfg.get("seed", 42))
-    excluded = frozenset()
-    if eval_prompts_path is not None and Path(eval_prompts_path).exists():
-        excluded = frozenset(_normalize(p) for p in pd.read_csv(eval_prompts_path)["prompt"])
+    parts = []
+    for subset, n in counts.items():
+        filename = f"{subset}/{split}.jsonl.gz"
+        try:
+            path = Path(hf_hub_download(HH_REPO, filename, repo_type="dataset", cache_dir=str(Path(raw_dir) / "hf_cache")))
+        except Exception as e:
+            raise RuntimeError(f"Could not download {HH_REPO}/{filename}: {type(e).__name__}: {e}. Is internet enabled?") from e
+        pairs, dropped = to_pairs(pd.read_json(path, lines=True), subset, excluded)
+        if len(pairs) < int(n):
+            raise ValueError(f"{filename}: only {len(pairs)} usable pairs, config asks for {n}")
+        parts.append(pairs.sample(n=int(n), random_state=seed))
+        meta.setdefault("files", {})[filename] = {"usable_pairs": len(pairs), **_file_version(path)}
+        meta.setdefault("dropped", {})[filename] = dropped
+    return pd.concat(parts).sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
-    out, meta = {"train": [], "test": []}, {"dataset": HH_REPO, "files": {}, "dropped": {}}
-    for split, key in [("train", "train_pairs"), ("test", "eval_pairs")]:
-        for subset, n in dcfg[key].items():
-            filename = f"{subset}/{split}.jsonl.gz"
-            try:
-                path = Path(hf_hub_download(HH_REPO, filename, repo_type="dataset", cache_dir=str(Path(raw_dir) / "hf_cache")))
-            except Exception as e:
-                raise RuntimeError(f"Could not download {HH_REPO}/{filename}: {type(e).__name__}: {e}. Is internet enabled?") from e
-            pairs, dropped = to_pairs(pd.read_json(path, lines=True), subset, excluded)
-            if len(pairs) < n:
-                raise ValueError(f"{filename}: only {len(pairs)} usable pairs, config asks for {n}")
-            out[split].append(pairs.sample(n=int(n), random_state=seed))
-            meta["files"][filename] = {"usable_pairs": len(pairs), "sampled": int(n), **_file_version(path)}
-            meta["dropped"][filename] = dropped
-    train = pd.concat(out["train"]).sample(frac=1.0, random_state=seed).reset_index(drop=True)
-    evals = pd.concat(out["test"]).reset_index(drop=True)
-    return train, evals, meta
+
+def load_stage_data(cfg: Dict, raw_dir: Path, eval_prompts_path: Optional[Path] = None) -> Tuple[Dict[str, pd.DataFrame], Dict]:
+    """
+    hh-rlhf data for both M2 stages, as set in configs/alignment.yaml:
+      sft_train / sft_eval: chosen replies only (helpful-base: helpful, not safety-trained)
+      dpo_train / dpo_eval: chosen vs rejected pairs (harmless-base: the safety alignment)
+    Each SFT example and DPO pair is a different conversation (different subsets, or disjoint samples of one).
+    """
+    seed = int(cfg.get("seed", 42))
+    excluded = eval_prompt_set(eval_prompts_path)
+    meta = {"dataset": HH_REPO, "excluded_eval_prompts": len(excluded)}
+    data = {}
+    for stage, (train_key, eval_key) in {"sft": ("train_examples", "eval_examples"), "dpo": ("train_pairs", "eval_pairs")}.items():
+        scfg = cfg[stage]
+        data[f"{stage}_train"] = load_hh_pairs(scfg[train_key], "train", raw_dir, excluded, seed, meta)
+        data[f"{stage}_eval"] = load_hh_pairs(scfg[eval_key], "test", raw_dir, excluded, seed + 1, meta)
+    for split in ("train", "eval"):
+        overlap = set(data[f"sft_{split}"]["pair_id"]) & set(data[f"dpo_{split}"]["pair_id"])
+        if overlap:
+            raise ValueError(f"{len(overlap)} hh-rlhf conversations are in both the SFT and DPO {split} data")
+    return data, meta

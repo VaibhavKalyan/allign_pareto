@@ -29,9 +29,9 @@ WildGuardMix, which is gated: do not post the file publicly.
 |---|---|
 | Samples per prompt | 5, seeds 0–4 (one seed per sample) |
 | Sampling | temperature 0.8, top_p 0.95, max_new_tokens 256 |
-| Chat format | the tokenizer's own chat template, `add_generation_prompt=True`, no system prompt |
+| Chat format | for **every** model, the chat template of the `Qwen/Qwen3-0.6B` tokenizer (the Base tokenizer's template differs; the vocabulary is identical), `add_generation_prompt=True`, no system prompt; stop at `<|im_end|>` or `<|endoftext|>` |
 | Qwen3 | `enable_thinking=False` |
-| Models | to agree: `Qwen/Qwen3-0.6B-Base` (base) vs `Qwen/Qwen3-0.6B` (aligned). Group A's DPO starts from `Qwen/Qwen3-0.6B`, so Group A's λ = 0 equals Group B's "aligned" model. |
+| Models | Group B: `Qwen/Qwen3-0.6B-Base` (pretrained only) vs `Qwen/Qwen3-0.6B` (Qwen's chat + safety training). Group A: `Qwen3-0.6B-Base` + Group A's SFT adapter (helpful-only, λ = 0) + DPO adapter scaled by λ (safety-aligned at λ = 1), float32 weights. The raw base model cannot follow the chat format, so expect near-empty or garbled replies from it. |
 
 ## 3. Metrics
 

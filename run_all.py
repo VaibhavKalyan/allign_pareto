@@ -32,6 +32,8 @@ REQUIRED_PRE_RUN_FILES = [
     "data/eval/eval_prompts.csv",
     "src/alignment/adapters.py",
     "src/alignment/dpo_data.py",
+    "src/alignment/models.py",
+    "src/alignment/train_sft.py",
     "src/alignment/train_dpo.py",
     "src/run_m2.py",
 ]
