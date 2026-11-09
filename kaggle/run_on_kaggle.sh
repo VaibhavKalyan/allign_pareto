@@ -4,11 +4,13 @@
 #   2. push notebooks/<code_file> as the kernel in kaggle/<milestone>/kernel-metadata.json
 #   3. wait for the run, download its output to outputs/kaggle/<milestone>/ and copy
 #      results/<milestone>, models/<milestone>, data/processed/<milestone> into the repo
-# Usage: kaggle/run_on_kaggle.sh m1 [--skip-upload]
+# Usage: kaggle/run_on_kaggle.sh m1 [--skip-upload | --collect]
+#   --skip-upload  push the kernel without uploading the code again
+#   --collect      push nothing: wait for the run already on Kaggle, then download and copy its outputs
 set -euo pipefail
 
-MILESTONE=${1:?usage: kaggle/run_on_kaggle.sh <m1|m2|...> [--skip-upload]}
-SKIP_UPLOAD=${2:-}
+MILESTONE=${1:?usage: kaggle/run_on_kaggle.sh <m1|m2|...> [--skip-upload | --collect]}
+MODE=${2:-}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 KAGGLE=${KAGGLE:-$ROOT/.venv/bin/kaggle}
 META="$ROOT/kaggle/$MILESTONE/kernel-metadata.json"
@@ -21,7 +23,7 @@ trap 'rm -rf "$STAGE"' EXIT
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
 # 1. Code dataset
-if [[ $SKIP_UPLOAD != --skip-upload ]]; then
+if [[ -z $MODE ]]; then
     mkdir -p "$STAGE/src-dataset"
     cp "$ROOT/kaggle/src-dataset/dataset-metadata.json" "$ROOT/requirements.txt" "$STAGE/src-dataset/"
     cp -r "$ROOT/src" "$ROOT/configs" "$STAGE/src-dataset/"
@@ -44,20 +46,22 @@ if [[ $SKIP_UPLOAD != --skip-upload ]]; then
 fi
 
 # 2. Kernel
-mkdir -p "$STAGE/kernel"
-cp "$META" "$STAGE/kernel/"
-cp "$ROOT/notebooks/$NOTEBOOK" "$STAGE/kernel/"
-log "Pushing $KERNEL"
-"$KAGGLE" kernels push -p "$STAGE/kernel"
+if [[ $MODE != --collect ]]; then
+    mkdir -p "$STAGE/kernel"
+    cp "$META" "$STAGE/kernel/"
+    cp "$ROOT/notebooks/$NOTEBOOK" "$STAGE/kernel/"
+    log "Pushing $KERNEL"
+    "$KAGGLE" kernels push -p "$STAGE/kernel"
+    sleep 30
+fi
 log "Run page: https://www.kaggle.com/code/$KERNEL"
 
 # 3. Wait, then download
-sleep 30
 while true; do
     STATUS=$("$KAGGLE" kernels status "$KERNEL" 2>&1 | tr '[:upper:]' '[:lower:]')
     case $STATUS in
-        *complete*) log "Run complete"; break ;;
-        *error*|*cancel*) log "Run failed: $STATUS"; FAILED=1; break ;;
+        *status.complete*) log "Run complete"; break ;;
+        *status.error*|*status.cancel*) log "Run failed: $STATUS"; FAILED=1; break ;;   # not transient CLI errors
         *) log "$STATUS"; sleep 60 ;;
     esac
 done
