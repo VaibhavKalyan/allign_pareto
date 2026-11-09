@@ -1,0 +1,90 @@
+{
+  "n_prompts": 400,
+  "seed": 42,
+  "config": {
+    "version": "v1",
+    "m1_processed_dir": "data/processed/m1",
+    "source_splits": [
+      "val",
+      "test"
+    ],
+    "per_quadrant_per_split": 50,
+    "max_prompt_chars": 2000,
+    "exclude_has_context": true,
+    "output_path": "data/eval/eval_prompts.csv"
+  },
+  "counts": [
+    {
+      "split": "test",
+      "quadrant": "0_0",
+      "source_dataset": "dolly",
+      "n": 25
+    },
+    {
+      "split": "test",
+      "quadrant": "0_0",
+      "source_dataset": "wildguardmix",
+      "n": 25
+    },
+    {
+      "split": "test",
+      "quadrant": "0_1",
+      "source_dataset": "wildguardmix",
+      "n": 50
+    },
+    {
+      "split": "test",
+      "quadrant": "1_0",
+      "source_dataset": "dolly",
+      "n": 25
+    },
+    {
+      "split": "test",
+      "quadrant": "1_0",
+      "source_dataset": "wildguardmix",
+      "n": 25
+    },
+    {
+      "split": "test",
+      "quadrant": "1_1",
+      "source_dataset": "wildguardmix",
+      "n": 50
+    },
+    {
+      "split": "validation",
+      "quadrant": "0_0",
+      "source_dataset": "dolly",
+      "n": 25
+    },
+    {
+      "split": "validation",
+      "quadrant": "0_0",
+      "source_dataset": "wildguardmix",
+      "n": 25
+    },
+    {
+      "split": "validation",
+      "quadrant": "0_1",
+      "source_dataset": "wildguardmix",
+      "n": 50
+    },
+    {
+      "split": "validation",
+      "quadrant": "1_0",
+      "source_dataset": "dolly",
+      "n": 25
+    },
+    {
+      "split": "validation",
+      "quadrant": "1_0",
+      "source_dataset": "wildguardmix",
+      "n": 25
+    },
+    {
+      "split": "validation",
+      "quadrant": "1_1",
+      "source_dataset": "wildguardmix",
+      "n": 50
+    }
+  ]
+}

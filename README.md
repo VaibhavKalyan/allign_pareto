@@ -54,8 +54,9 @@ left out; they are not in the §35 "must work" list. Diversity is kept as the wa
 | Step | File | State |
 |---|---|---|
 | Safety: harmful refusal rate, benign false-refusal rate | `src/evaluation/safety.py` | to write |
-| Creativity on creative prompts: diversity (1 − mean pairwise cosine), cluster count, novelty | `src/evaluation/creativity.py` | to write |
-| Eval prompt set, N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
+| Creativity on creative prompts: diversity (1 − mean pairwise cosine), semantic cluster count, novelty | `src/evaluation/creativity.py` | to write |
+| Shared eval prompt set (400 prompts from M1 val/test) + protocol for Group B | `src/evaluation/build_eval_set.py`, `docs/EVAL_PROTOCOL.md` | done |
+| N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
 
 ### M4: Adaptive controller (§20)
 | Step | File | State |
