@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 done (v4, 2026-11-10): SFT on no_robots + oasst2, no DPO. M3 aligned model decided: Qwen's `Qwen/Qwen3-0.6B`, λ blends the weights; M3–M4 not run yet.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -18,6 +18,7 @@ models/       classifier + DPO adapter    (filled by M1/M2; not committed)
 results/      CSV/JSON metrics + plots    (filled by every milestone)
 reports/      final write-up
 _archive/     earlier simulated code, kept for reference only; never import from it
+unused/       code no longer used by the pipeline (DPO stage, λ adapter scaling); see unused/README.md
 ```
 
 ## Roadmap: which file each step goes in
@@ -40,23 +41,38 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 | Hand-check creative labels (fill `human_creative_label`) | `results/m1/creative_rule_audit.csv`, `results/m1/fictional_framing_predictions.csv` | to do (team) |
 | Decide whether Dolly `brainstorming` (mostly lists/recommendations) and `creative_writing` letters/emails count as creative | `docs/ANNOTATION_GUIDE.md` | to do (team) |
 
-### M2: DPO alignment (§18–19)
+### M2: SFT from the unaligned base model (§18)
+`Qwen3-0.6B-Base` (pretrained only) → **SFT** (LoRA, float32 weights) on human-written replies (no_robots + oasst2,
+refusal-like replies removed): helpful-only chat model. DPO is no longer run; its code is in `unused/`.
+Replies end with `<|endoftext|>`: v3 (`results/m2_v3_no_stop/`) ended them with `<|im_end|>`, whose base-model
+weights are untrained, and never stopped.
+Earlier runs, kept for the report: v1 (`results/m2_v1_instruct_start/`, DPO on the already-aligned Qwen3-0.6B: small
+effect) and v2 (`results/m2_v2_hh_sft/`, SFT on hh-rlhf helpful replies: λ = 0 deflected and looped, λ = 1 refused
+almost everything).
 | Step | File | State |
 |---|---|---|
-| Load hh-rlhf → (prompt, chosen, rejected); 3.5k harmless + 1.5k helpful pairs; eval prompts excluded | `src/alignment/dpo_data.py` | done |
-| Qwen3-0.6B + 4-bit QLoRA + TRL DPOTrainer, save adapter | `src/alignment/train_dpo.py` | done |
-| Orchestrator (+ adapter reload check, λ=0 vs λ=1 smoke test) | `src/run_m2.py` | done |
-| Set adapter strength λ | `src/alignment/adapters.py` | done |
-| Kaggle notebook (Kaggle kernel `align-pareto-m2-dpo`, GPU T4) | `notebooks/02_alignment_training_kaggle.ipynb` | written; run with `kaggle/run_on_kaggle.sh m2` |
+| SFT data: no_robots + oasst2, refusal-like replies and eval prompts removed | `src/alignment/sft_data.py` | done |
+| SFT training, loss on the reply only | `src/alignment/train_sft.py` | done |
+| Model loading (base, base + merged SFT), chat template, generation | `src/alignment/models.py` | done |
+| Orchestrator (SFT only; reload check; smoke test with share of replies stopped / with stray characters) | `src/run_m2.py` | done |
+| Kaggle notebook (kernel `align-pareto-m2-dpo`, GPU T4) | `notebooks/02_alignment_training_kaggle.ipynb` | done: v4 in `results/m2/` (10/16 replies stop, rest hit the 200-token limit; no stray characters) |
 
 ### M3: λ sweep + Pareto frontier (§22–24, §35)
 Two axes only (team decision): **safety** and **creativity**. Capability (§22) and uncertainty (§25) are
 left out; they are not in the §35 "must work" list. Diversity is kept as the way creativity is measured (§23–24).
+
+Models (`configs/evaluation.yaml` → `models`, details in [`docs/EVAL_PROTOCOL.md`](docs/EVAL_PROTOCOL.md)):
+λ blends the weights of `sft-helpful-only` (our M2 SFT model, λ = 0) and `qwen3-instruct` (Qwen's aligned
+`Qwen/Qwen3-0.6B`, λ = 1): W(λ) = W_sft + λ · (W_qwen3 − W_sft). Both start from Qwen3-0.6B-Base. The λ direction
+carries all of Qwen's post-training, not only safety. Group B compares the two endpoints.
 | Step | File | State |
 |---|---|---|
 | Safety: harmful refusal rate, benign false-refusal rate | `src/evaluation/safety.py` | to write |
 | Creativity on creative prompts: diversity (1 − mean pairwise cosine), semantic cluster count, novelty | `src/evaluation/creativity.py` | to write |
+| λ dial: weight interpolation SFT → Qwen3-0.6B | `src/alignment/interpolate.py` | done (not yet run) |
+| Check before the sweep: endpoints exact, every λ replies normally | `src/check_interpolation.py`, `notebooks/03_interp_check_kaggle.ipynb` → `results/m3_interp_check/` | to run: `kaggle/publish_adapters.sh`, then `kaggle/run_on_kaggle.sh m3_interp_check` |
 | Shared eval prompt set (400 prompts from M1 val/test) + protocol for Group B | `src/evaluation/build_eval_set.py`, `docs/EVAL_PROTOCOL.md` | done |
+| Publish the M2 SFT adapter as Kaggle dataset `align-pareto-m2-adapters` (M3 + Group B input) | `kaggle/publish_adapters.sh` | run after M2 |
 | N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
 
 ### M4: Adaptive controller (§20)
@@ -73,7 +89,7 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 | Milestone | Estimate |
 |---|---|
 | M1 | 15–30 min (CPU is enough) |
-| M2 | 1–2.5 h (~5k pairs; start with 1 epoch) |
+| M2 | 1.5–2 h (SFT 8k examples + DPO 5k pairs × 2 epochs) |
 | M3 | 2–4 h (≈400 prompts × 5 samples × 5 λ, on val + test) |
 | M4 | 0.5–1 h |
 | **Total** | **≈ 4–8 GPU hours** (weekly free quota is ~30 h, which leaves room for re-runs) |

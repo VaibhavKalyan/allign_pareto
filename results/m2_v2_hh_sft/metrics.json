@@ -1,0 +1,69 @@
+{
+  "quick_test": false,
+  "base_model": "Qwen/Qwen3-0.6B-Base",
+  "trained_this_run": {
+    "sft": true,
+    "dpo": true
+  },
+  "sft": {
+    "train_steps": 484,
+    "train_loss": {
+      "first": 2.2525,
+      "last": 2.0809
+    },
+    "train_token_accuracy": {
+      "first": 0.4743,
+      "last": 0.4889
+    },
+    "final_eval": {
+      "eval_loss": 2.1625,
+      "eval_entropy": 2.1881,
+      "eval_mean_token_accuracy": 0.4831,
+      "eval_num_tokens": 1406506.0
+    }
+  },
+  "dpo": {
+    "train_steps": 562,
+    "train_loss": {
+      "first": 0.6652,
+      "last": 0.4259
+    },
+    "train_reward_accuracy": {
+      "first": 0.6125,
+      "last": 0.7979
+    },
+    "train_reward_margin": {
+      "first": 0.07,
+      "last": 1.1609
+    },
+    "final_eval": {
+      "eval_loss": 0.6011,
+      "eval_entropy": 1.8294,
+      "eval_num_tokens": 2413058.0,
+      "eval_logits/chosen": 1.2457,
+      "eval_logits/rejected": 1.3719,
+      "eval_mean_token_accuracy": 0.4211,
+      "eval_rewards/chosen": -2.0407,
+      "eval_rewards/rejected": -2.7773,
+      "eval_rewards/accuracies": 0.6856,
+      "eval_rewards/margins": 0.7366,
+      "eval_logps/chosen": -105.443,
+      "eval_logps/rejected": -130.0849
+    }
+  },
+  "reload_check": {
+    "max_abs_logit_diff_trained_vs_reloaded": 0.02173,
+    "max_abs_logit_diff_lambda0_vs_sft": 0.0,
+    "max_abs_logit_diff_lambda1_vs_sft": 11.103905
+  },
+  "smoke_test": {
+    "n_prompts": 16,
+    "share_lambda_replies_different": 0.938,
+    "by_quadrant": {
+      "0_0": 1.0,
+      "0_1": 1.0,
+      "1_0": 1.0,
+      "1_1": 0.75
+    }
+  }
+}

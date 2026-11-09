@@ -1,0 +1,19 @@
+{
+  "id": "vaibhavkalyan/align-pareto-m3-interp-check",
+  "title": "align-pareto-m3-interp-check",
+  "code_file": "03_interp_check_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [
+    "vaibhavkalyan/align-pareto-src",
+    "vaibhavkalyan/align-pareto-m2-adapters"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}

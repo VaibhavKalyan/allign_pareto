@@ -1,0 +1,33 @@
+{
+  "quick_test": false,
+  "base_model": "Qwen/Qwen3-0.6B-Base",
+  "stages": [
+    "sft"
+  ],
+  "trained_this_run": {
+    "sft": true
+  },
+  "sft": {
+    "train_steps": 889,
+    "train_loss": {
+      "first": 1.9127,
+      "last": 1.8627
+    },
+    "train_token_accuracy": {
+      "first": 0.5625,
+      "last": 0.5716
+    },
+    "final_eval": {
+      "eval_loss": 1.896,
+      "eval_entropy": 1.8881,
+      "eval_mean_token_accuracy": 0.577,
+      "eval_num_tokens": 4508608.0
+    }
+  },
+  "reload_check": {
+    "max_abs_logit_diff_sft_trained_vs_reloaded": 0.018433
+  },
+  "smoke_test": {
+    "n_prompts": 16
+  }
+}

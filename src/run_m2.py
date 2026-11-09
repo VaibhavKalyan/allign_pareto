@@ -1,8 +1,9 @@
 """
-Milestone 2 (M2): DPO alignment of Qwen3-0.6B with a LoRA adapter on hh-rlhf preference pairs.
-Run from project root: `python3 src/run_m2.py` (add `--quick` for a tiny smoke test).
-Checks (spec §36 M2 / implementation plan): loss decreases, the adapter reloads to the same outputs, and
-lambda=0 vs lambda=1 give different replies on the evaluation prompts.
+Milestone 2 (M2): supervised fine-tuning (SFT) of the unaligned Qwen3-0.6B-Base into a helpful-only chat model.
+  Human-written replies (no_robots, oasst2) -> models/m2/sft_adapter
+Run from project root: `python3 src/run_m2.py` (`--quick` for a tiny smoke test).
+Checks: loss falls, the saved adapter reloads to the trained model, and replies of the raw base model and the SFT model
+on evaluation prompts are saved, with the share of replies that stop on their own and the share with stray characters.
 """
 import json
 import sys
@@ -14,30 +15,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.utils.seed import environment_info, set_global_seed
 from src.utils.logging import StructuredLogger
 from src.utils.io import load_yaml, save_json, save_parquet
-from src.alignment.adapters import set_peft_lora_lambda
-from src.alignment.dpo_data import load_preference_pairs
-from src.alignment.train_dpo import (
-    build_dpo_dataset, generate, has_cuda, is_quantized, last_checkpoint, last_token_logits, load_adapter_model,
-    load_base_model, load_tokenizer, make_trainer, pairs_to_parquet_frame, render_prompt, save_adapter, train_log_frame,
+from src.alignment.models import (
+    generate, has_cuda, last_checkpoint, last_token_logits, load_base_model, load_sft_model, load_tokenizer,
+    render_prompt, save_adapter,
 )
+from src.alignment.sft_data import load_sft_data
+from src.alignment.train_sft import build_sft_dataset, make_sft_trainer
+
+PROBE_PROMPT = "How do I pick a lock?"
+# Characters from scripts the training data does not use; they appeared where the v3 SFT model failed to stop
+STRAY_CHARS = r"[฀-๿一-鿿Ѐ-ӿ�]"
 
 
 def plot_training(log: pd.DataFrame, path: Path) -> None:
+    """Loss and token accuracy, train and eval."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-    for col, label in [("loss", "train"), ("eval_loss", "eval")]:
-        if col in log:
-            d = log.dropna(subset=[col])
-            axes[0].plot(d["step"], d[col], marker="o", ms=3, label=label)
-    axes[0].set(title="DPO loss", xlabel="step", ylabel="loss")
-    for col, label in [("rewards/accuracies", "train"), ("eval_rewards/accuracies", "eval")]:
-        if col in log:
-            d = log.dropna(subset=[col])
-            axes[1].plot(d["step"], d[col], marker="o", ms=3, label=label)
-    axes[1].set(title="Reward accuracy (chosen > rejected)", xlabel="step", ylim=(0, 1))
-    for ax in axes:
+    for ax, cols, ylabel in [(axes[0], ("loss", "eval_loss"), "loss"),
+                             (axes[1], ("mean_token_accuracy", "eval_mean_token_accuracy"), "token accuracy")]:
+        for col, label in zip(cols, ("train", "eval")):
+            if col in log:
+                d = log.dropna(subset=[col])
+                ax.plot(d["step"], d[col], marker="o", ms=3, label=label)
+        ax.set(xlabel="step", ylabel=ylabel, title=f"SFT {ylabel}")
         ax.legend()
         ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -54,125 +56,121 @@ def _first_last(log: pd.DataFrame, col: str, k: int = 3) -> dict:
     return {"first": round(float(vals.head(k).mean()), 4), "last": round(float(vals.tail(k).mean()), 4)}
 
 
+def _rounded(d: dict) -> dict:
+    return {k: round(float(v), 4) for k, v in d.items() if isinstance(v, (int, float))}
+
+
+def apply_quick_test(cfg: dict) -> int:
+    """Shrink SFT to a few examples and steps; returns max_steps."""
+    q, scfg = cfg["quick_test"], cfg["sft"]
+    scfg["train_examples"] = {k: min(int(v), int(q["train_examples"])) for k, v in scfg["train_examples"].items()}
+    scfg["eval_examples"] = {k: min(int(v), int(q["eval_examples"])) for k, v in scfg["eval_examples"].items()}
+    scfg.update(max_length=int(q["max_length"]), eval_steps=1, logging_steps=1)
+    return int(q["max_steps"])
+
+
+def reply_quality(replies: pd.Series, tokenizer, max_new_tokens: int) -> dict:
+    """Share of replies that ended before the token limit, and share containing stray characters."""
+    n_tokens = replies.astype(str).map(lambda t: len(tokenizer(t, add_special_tokens=False)["input_ids"]))
+    return {"share_stopped": round(float((n_tokens < max_new_tokens - 5).mean()), 3),
+            "share_stray_chars": round(float(replies.astype(str).str.contains(STRAY_CHARS).mean()), 3),
+            "mean_reply_tokens": round(float(n_tokens.mean()), 1)}
+
+
 def run_m2(root_dir: Path = Path("."), quick: bool = False, retrain: bool = False) -> dict:
     cfg = load_yaml(root_dir / "configs/alignment.yaml")
     seed = int(cfg.get("seed", 42))
     set_global_seed(seed)
-    mcfg, dcfg = cfg["model"], cfg["dpo"]
-    max_steps = None
-    if quick:
-        q = cfg["quick_test"]
-        dcfg["train_pairs"] = {k: min(int(v), int(q["train_pairs"])) for k, v in dcfg["train_pairs"].items()}
-        dcfg["eval_pairs"] = {k: min(int(v), int(q["eval_pairs"])) for k, v in dcfg["eval_pairs"].items()}
-        dcfg.update(max_length=int(q["max_length"]), max_prompt_length=int(q["max_prompt_length"]), eval_steps=1, logging_steps=1)
-        max_steps = int(q["max_steps"])
+    mcfg, scfg, smoke_cfg = cfg["model"], cfg["sft"], cfg["smoke_test"]
+    max_steps = apply_quick_test(cfg) if quick else None
     enable_thinking = bool(mcfg.get("enable_thinking", False))
 
     tag = "m2_quick" if quick else "m2"
     results_dir = root_dir / "results" / tag
     models_dir = root_dir / "models" / tag
     processed_dir = root_dir / "data/processed" / tag
-    adapter_dir = models_dir / "dpo_adapter"
+    sft_dir = models_dir / "sft_adapter"
     logger = StructuredLogger("m2_pipeline", results_dir / "execution.jsonl")
-    logger.info("Starting M2 pipeline", seed=seed, quick=quick, cuda=has_cuda())
+    logger.info("Starting M2 pipeline (SFT only)", seed=seed, quick=quick, cuda=has_cuda(), base_model=mcfg["base_model_name"])
     if not has_cuda() and not quick:
         raise RuntimeError("M2 needs a CUDA GPU (Kaggle: Settings -> Accelerator -> GPU T4). Use --quick for a CPU smoke test.")
 
-    # 1. Preference pairs (evaluation prompts are excluded so M3 never scores a prompt the adapter trained on)
+    # 1. Training data (evaluation prompts excluded so M3 never scores a trained-on prompt)
     eval_prompts_path = root_dir / "data/eval/eval_prompts.csv"
-    train_pairs, eval_pairs, data_meta = load_preference_pairs(cfg, root_dir / "data/raw", eval_prompts_path)
-    save_parquet(pairs_to_parquet_frame(train_pairs), processed_dir / "train_pairs.parquet")
-    save_parquet(pairs_to_parquet_frame(eval_pairs), processed_dir / "eval_pairs.parquet")
+    data, data_meta = load_sft_data(cfg, root_dir / "data/raw", eval_prompts_path)
+    tokenizer = load_tokenizer(mcfg)
+    datasets, used, dropped = {}, {}, {}
+    for name, df in data.items():
+        save_parquet(df.assign(prompt=df["prompt"].map(json.dumps)), processed_dir / f"{name}.parquet")
+        datasets[name], dropped[name] = build_sft_dataset(df, tokenizer, int(scfg["max_length"]), enable_thinking)
+        used[name] = len(datasets[name])
+    data_meta.update(used=used, dropped_over_length=dropped, end_of_reply_token=tokenizer.eos_token)
+    logger.info("Training data ready", used=used, dropped_over_length=dropped, end_of_reply_token=tokenizer.eos_token)
 
-    tokenizer = load_tokenizer(mcfg["base_model_name"])
-    train_ds, train_dropped = build_dpo_dataset(train_pairs, tokenizer, int(dcfg["max_prompt_length"]), int(dcfg["max_length"]), enable_thinking)
-    eval_ds, eval_dropped = build_dpo_dataset(eval_pairs, tokenizer, int(dcfg["max_prompt_length"]), int(dcfg["max_length"]), enable_thinking)
-    data_meta.update(train_pairs_used=len(train_ds), eval_pairs_used=len(eval_ds),
-                     dropped_over_length={"train": train_dropped, "eval": eval_dropped})
-    logger.info("Preference pairs ready", **{k: data_meta[k] for k in ["train_pairs_used", "eval_pairs_used", "dropped_over_length"]})
+    metrics = {"quick_test": quick, "base_model": mcfg["base_model_name"], "stages": ["sft"],
+               "end_of_reply_token": tokenizer.eos_token}
+    probe = render_prompt([{"role": "user", "content": PROBE_PROMPT}], tokenizer, enable_thinking)
 
-    # 2. DPO training (skipped when an adapter is already saved; resumes from the last checkpoint if interrupted)
-    t0 = time.time()
-    trained_now = retrain or not (adapter_dir / "adapter_config.json").exists()
-    trained_model = None
-    if trained_now:
-        model = load_base_model(mcfg)
-        trainer = make_trainer(model, tokenizer, train_ds, eval_ds, cfg, models_dir / "checkpoints", max_steps=max_steps)
-        trainer.train(resume_from_checkpoint=last_checkpoint(models_dir / "checkpoints"))
+    # 2. SFT (skipped when an adapter is already saved, unless retrain)
+    sft_trained = retrain or not (sft_dir / "adapter_config.json").exists()
+    if sft_trained:
+        t0 = time.time()
+        ckpt_dir = models_dir / "sft_checkpoints"
+        trainer = make_sft_trainer(load_base_model(mcfg), tokenizer, datasets["sft_train"], datasets["sft_eval"], cfg, ckpt_dir, max_steps=max_steps)
+        trainer.train(resume_from_checkpoint=last_checkpoint(ckpt_dir))
         final_eval = trainer.evaluate()
-        save_adapter(trainer, tokenizer, adapter_dir)
-        log = train_log_frame(trainer)
-        log.to_csv(results_dir / "train_log.csv", index=False)
-        save_json(final_eval, results_dir / "final_eval.json")
-        trained_model = trainer.model
-        trained_model.eval()
-        logger.info("DPO training finished", minutes=round((time.time() - t0) / 60, 1), eval_loss=final_eval.get("eval_loss"))
+        save_adapter(trainer, tokenizer, sft_dir)
+        log = pd.DataFrame(trainer.state.log_history)
+        log.to_csv(results_dir / "sft_train_log.csv", index=False)
+        minutes = round((time.time() - t0) / 60, 1)
+        save_json({"minutes": minutes, **final_eval}, results_dir / "sft_final_eval.json")
+        logger.info("SFT finished", minutes=minutes, eval_loss=final_eval.get("eval_loss"))
+        trainer.model.eval()
+        logits_trained = last_token_logits(trainer.model, tokenizer, probe)
+        del trainer
+        diff = round(float((logits_trained - last_token_logits(load_sft_model(mcfg, sft_dir), tokenizer, probe)).abs().max()), 6)
+        metrics["reload_check"] = {"max_abs_logit_diff_sft_trained_vs_reloaded": diff}
+        logger.info("Adapter reload check", **metrics["reload_check"])
+        # Small fp16-autocast differences only: the trained copy may still run in autocast, the reloaded one does not
+        if diff > 0.1:
+            raise AssertionError(f"Reloaded adapter does not match the trained model: {metrics['reload_check']}")
     else:
-        log = pd.read_csv(results_dir / "train_log.csv")
-        final_eval = json.loads((results_dir / "final_eval.json").read_text())
-        logger.info("Adapter already saved; skipping training", adapter_dir=str(adapter_dir))
-    plot_training(log, results_dir / "plots/dpo_training.png")
+        log = pd.read_csv(results_dir / "sft_train_log.csv")
+        final_eval = json.loads((results_dir / "sft_final_eval.json").read_text())
+        logger.info("SFT adapter already saved; skipping training", adapter_dir=str(sft_dir))
+    plot_training(log, results_dir / "plots/sft_training.png")
+    metrics["sft"] = {"trained_this_run": sft_trained, "train_steps": int(log["step"].max()),
+                      "train_loss": _first_last(log, "loss"), "train_token_accuracy": _first_last(log, "mean_token_accuracy"),
+                      "final_eval": _rounded(final_eval)}
 
-    # 3. Adapter reload check: the saved adapter must reproduce the trained model, and lambda=0 must be the base model
-    reloaded = load_adapter_model(mcfg, adapter_dir)
-    probe = render_prompt([{"role": "user", "content": "How do I pick a lock?"}], tokenizer, enable_thinking)
-    reload_check = {}
-    set_peft_lora_lambda(reloaded, 1.0)
-    logits_reloaded = last_token_logits(reloaded, tokenizer, probe)
-    if trained_model is not None:
-        logits_trained = last_token_logits(trained_model, tokenizer, probe)
-        reload_check["max_abs_logit_diff_trained_vs_reloaded"] = round(float((logits_trained - logits_reloaded).abs().max()), 6)
-        del trained_model, trainer, model
-    with reloaded.disable_adapter():
-        logits_base = last_token_logits(reloaded, tokenizer, probe)
-    set_peft_lora_lambda(reloaded, 0.0)
-    logits_l0 = last_token_logits(reloaded, tokenizer, probe)
-    reload_check["max_abs_logit_diff_lambda0_vs_base"] = round(float((logits_l0 - logits_base).abs().max()), 6)
-    reload_check["max_abs_logit_diff_lambda1_vs_base"] = round(float((logits_reloaded - logits_base).abs().max()), 6)
-    logger.info("Adapter reload check", **reload_check)
-    if reload_check["max_abs_logit_diff_lambda0_vs_base"] > 1e-3:
-        raise AssertionError(f"lambda=0 does not reproduce the base model: {reload_check}")
-    # Not exact: during training the norms run in float32 (prepare_model_for_kbit_training), after reload in float16
-    if reload_check.get("max_abs_logit_diff_trained_vs_reloaded", 0.0) > 0.25:
-        raise AssertionError(f"Reloaded adapter does not match the trained model: {reload_check}")
-
-    # 4. Smoke test: greedy replies at lambda=0 (base) and lambda=1 (aligned) on validation evaluation prompts
-    scfg = cfg["smoke_test"]
+    # 3. Smoke test: sampled replies (M3's settings, fixed seed) of the raw base model and the SFT model
     ev = pd.read_csv(eval_prompts_path)
-    ev = ev[ev["split"] == "validation"].groupby("quadrant", group_keys=False).head(int(scfg["prompts_per_quadrant"]))
+    ev = ev[ev["split"] == "validation"].groupby("quadrant", group_keys=False).head(int(smoke_cfg["prompts_per_quadrant"]))
     smoke = ev[["prompt_id", "quadrant", "prompt"]].copy()
-    for lam in (0.0, 1.0):
-        set_peft_lora_lambda(reloaded, lam)
-        smoke[f"reply_lambda_{lam:g}"] = generate(reloaded, tokenizer, smoke["prompt"].tolist(), int(scfg["max_new_tokens"]), enable_thinking)
-    smoke["differs"] = smoke["reply_lambda_0"] != smoke["reply_lambda_1"]
+    gen = {"max_new_tokens": int(smoke_cfg["max_new_tokens"]), "enable_thinking": enable_thinking,
+           "temperature": float(smoke_cfg["temperature"]), "top_p": float(smoke_cfg["top_p"]), "seed": int(smoke_cfg["seed"])}
+    prompts = smoke["prompt"].tolist()
+    smoke["reply_base_model"] = generate(load_base_model(mcfg), tokenizer, prompts, **gen)
+    smoke["reply_sft"] = generate(load_sft_model(mcfg, sft_dir), tokenizer, prompts, **gen)
     smoke.to_csv(results_dir / "smoke_test.csv", index=False)
-    logger.info("Smoke test", n=len(smoke), share_different=round(float(smoke["differs"].mean()), 3))
+    # Reply quality: a reply that runs to the token limit never stopped (v3's failure); stray characters mark a broken end
+    metrics["smoke_test"] = {"n_prompts": len(smoke), "max_new_tokens": gen["max_new_tokens"],
+                             "base_model": reply_quality(smoke["reply_base_model"], tokenizer, gen["max_new_tokens"]),
+                             "sft": reply_quality(smoke["reply_sft"], tokenizer, gen["max_new_tokens"])}
+    logger.info("Smoke test", **metrics["smoke_test"])
 
-    metrics = {
-        "quick_test": quick,
-        "trained_this_run": trained_now,
-        "train_minutes": round((time.time() - t0) / 60, 1) if trained_now else None,
-        "train_steps": int(log["step"].max()) if "step" in log else None,
-        "train_loss": _first_last(log, "loss"),
-        "train_reward_accuracy": _first_last(log, "rewards/accuracies"),
-        "train_reward_margin": _first_last(log, "rewards/margins"),
-        "final_eval": {k: round(float(v), 4) for k, v in final_eval.items() if isinstance(v, (int, float))},
-        "reload_check": reload_check,
-        "smoke_test": {"n_prompts": len(smoke), "share_replies_different": round(float(smoke["differs"].mean()), 3),
-                       "by_quadrant": smoke.groupby("quadrant")["differs"].mean().round(3).to_dict()},
-        "quantized_4bit": is_quantized(reloaded),
-    }
     save_json(metrics, results_dir / "metrics.json")
-    save_json({"m2_config": cfg, "data": data_meta, "environment": environment_info()}, results_dir / "experiment_config.json")
-    logger.info("Completed M2 pipeline", train_loss=metrics["train_loss"], share_different=metrics["smoke_test"]["share_replies_different"])
+    save_json({"m2_config": cfg, "data": data_meta, "environment": environment_info()},
+              results_dir / "experiment_config.json")
+    logger.info("Completed M2 pipeline (SFT only)")
     return metrics
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Run ALIGN-PARETO M2")
+    parser = argparse.ArgumentParser(description="Run ALIGN-PARETO M2 (SFT on Qwen3-0.6B-Base)")
     parser.add_argument("--quick", action="store_true", help="tiny smoke test; results go to results/m2_quick")
-    parser.add_argument("--retrain", action="store_true", help="train again even if an adapter is already saved")
+    parser.add_argument("--retrain", action="store_true", help="train again even if an adapter is saved")
     args = parser.parse_args()
     res = run_m2(Path(__file__).resolve().parents[1], quick=args.quick, retrain=args.retrain)
     print("M2 Complete:", json.dumps(res, indent=2))

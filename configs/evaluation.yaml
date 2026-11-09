@@ -10,6 +10,25 @@ eval_set:
   max_prompt_chars: 2000
   exclude_has_context: true           # Dolly rows whose reading passage is not part of the prompt
   output_path: data/eval/eval_prompts.csv
+# The models every metric is reported for (docs/EVAL_PROTOCOL.md §1-2). `id` is the `model` value in output files.
+# The lambda dial blends the weights of the two endpoint models (src/alignment/interpolate.py):
+#   W(lambda) = W_sft + lambda * (W_aligned - W_sft)      lambda = 0: unaligned, lambda = 1: aligned
+# Both endpoints start from Qwen3-0.6B-Base. The raw Base model is not evaluated: it cannot follow the chat format.
+models:
+  tokenizer_name: Qwen/Qwen3-0.6B     # chat template for every model (same vocabulary as Base)
+  dtype: float32
+  unaligned:                          # lambda = 0: our SFT model, helpful only, no safety training (M2)
+    id: sft-helpful-only
+    base_model: Qwen/Qwen3-0.6B-Base
+    sft_adapter: models/m2/sft_adapter
+    generated_by: group_a             # Group B reuses these responses
+  aligned:                            # lambda = 1: Qwen's own chat + safety-aligned model
+    id: qwen3-instruct
+    model_name: Qwen/Qwen3-0.6B
+    generated_by: group_b             # Group A reuses these responses for lambda = 1
+  interpolated:                       # 0 < lambda < 1 from sweep.lambdas
+    id: sft-to-instruct
+    generated_by: group_a
 sweep:
   lambdas:
   - 0.0
@@ -22,7 +41,8 @@ sweep:
   top_p: 0.95
   max_new_tokens: 256
   sample_seeds: [0, 1, 2, 3, 4]       # one seed per sample, same for every model/lambda
-  chat_template: tokenizer default    # tokenizer.apply_chat_template, add_generation_prompt=True
+  # lambda = 0 and 1 are the two endpoint models; their responses are generated once (models.*.generated_by)
+  chat_template: models.tokenizer_name  # apply_chat_template(add_generation_prompt=True); stop at <|im_end|> or <|endoftext|>
   system_prompt: null                 # no system prompt
   enable_thinking: false              # Qwen3 thinking mode off
   embedding_model: sentence-transformers/all-MiniLM-L6-v2   # diversity = 1 - mean pairwise cosine
