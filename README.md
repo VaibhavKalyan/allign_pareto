@@ -43,10 +43,11 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 ### M2: DPO alignment (§18–19)
 | Step | File | State |
 |---|---|---|
-| Load hh-rlhf → (prompt, chosen, rejected) | `src/alignment/dpo_data.py` | to write |
-| Qwen3-0.6B + 4-bit QLoRA + TRL DPOTrainer, save adapter | `src/alignment/train_dpo.py` | to write |
+| Load hh-rlhf → (prompt, chosen, rejected); 3.5k harmless + 1.5k helpful pairs; eval prompts excluded | `src/alignment/dpo_data.py` | done |
+| Qwen3-0.6B + 4-bit QLoRA + TRL DPOTrainer, save adapter | `src/alignment/train_dpo.py` | done |
+| Orchestrator (+ adapter reload check, λ=0 vs λ=1 smoke test) | `src/run_m2.py` | done |
 | Set adapter strength λ | `src/alignment/adapters.py` | done |
-| Kaggle notebook (train + real smoke-test generations) | `notebooks/02_alignment_training_kaggle.ipynb` | to write |
+| Kaggle notebook (Kaggle kernel `align-pareto-m2-dpo`, GPU T4) | `notebooks/02_alignment_training_kaggle.ipynb` | written; run with `kaggle/run_on_kaggle.sh m2` |
 
 ### M3: λ sweep + Pareto frontier (§22–24, §35)
 Two axes only (team decision): **safety** and **creativity**. Capability (§22) and uncertainty (§25) are

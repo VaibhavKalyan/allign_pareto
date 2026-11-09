@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run one milestone notebook on Kaggle from this machine and bring its outputs back.
-#   1. upload src/, configs/, requirements.txt as a new version of the dataset `align-pareto-src`
+#   1. upload src/, configs/, data/eval/, requirements.txt as a new version of the dataset `align-pareto-src`
 #   2. push notebooks/<code_file> as the kernel in kaggle/<milestone>/kernel-metadata.json
 #   3. wait for the run, download its output to outputs/kaggle/<milestone>/ and copy
 #      results/<milestone>, models/<milestone>, data/processed/<milestone> into the repo
@@ -25,8 +25,9 @@ if [[ $SKIP_UPLOAD != --skip-upload ]]; then
     mkdir -p "$STAGE/src-dataset"
     cp "$ROOT/kaggle/src-dataset/dataset-metadata.json" "$ROOT/requirements.txt" "$STAGE/src-dataset/"
     cp -r "$ROOT/src" "$ROOT/configs" "$STAGE/src-dataset/"
+    mkdir -p "$STAGE/src-dataset/data" && cp -r "$ROOT/data/eval" "$STAGE/src-dataset/data/"
     find "$STAGE/src-dataset" -name __pycache__ -prune -exec rm -rf {} +
-    VERSION_MSG="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD -- src configs requirements.txt || echo '+local-changes')"
+    VERSION_MSG="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD -- src configs data/eval requirements.txt || echo '+local-changes')"
     log "Uploading $SRC_DATASET ($VERSION_MSG)"
     "$KAGGLE" datasets version -p "$STAGE/src-dataset" -m "$VERSION_MSG" -r zip
     until "$KAGGLE" datasets status "$SRC_DATASET" 2>/dev/null | grep -qi ready; do
