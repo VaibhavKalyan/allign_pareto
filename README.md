@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 code revised (label rules, leakage, safety threshold, reporting); `results/m1/` is from the previous code and must be re-run on Kaggle. M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -36,17 +36,18 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 | Metrics, confusion matrices, calibration, val-tuned thresholds (safety: recall-first), per-source breakdowns | `src/classifier/evaluate.py` | done |
 | Orchestrator (+ WildGuardTest external eval, fictional-framing eval slice, error analysis, audit files) | `src/run_m1.py` | done |
 | Unit tests for label rules, leakage filter, thresholds (`pytest tests`) | `tests/test_m1.py` | done |
-| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | re-run needed (code changed after v3) |
+| Kaggle notebook (Kaggle code: dataset `align-pareto-src`, kernel `align-pareto-m1-classifier`) | `notebooks/01_classifier_kaggle.ipynb` | done (run with `kaggle/run_on_kaggle.sh m1`) |
 | Hand-check creative labels (fill `human_creative_label`) | `results/m1/creative_rule_audit.csv`, `results/m1/fictional_framing_predictions.csv` | to do (team) |
 | Decide whether Dolly `brainstorming` (mostly lists/recommendations) and `creative_writing` letters/emails count as creative | `docs/ANNOTATION_GUIDE.md` | to do (team) |
 
 ### M2: DPO alignment (§18–19)
 | Step | File | State |
 |---|---|---|
-| Load hh-rlhf → (prompt, chosen, rejected) | `src/alignment/dpo_data.py` | to write |
-| Qwen3-0.6B + 4-bit QLoRA + TRL DPOTrainer, save adapter | `src/alignment/train_dpo.py` | to write |
+| Load hh-rlhf → (prompt, chosen, rejected); 3.5k harmless + 1.5k helpful pairs; eval prompts excluded | `src/alignment/dpo_data.py` | done |
+| Qwen3-0.6B + 4-bit QLoRA + TRL DPOTrainer, save adapter | `src/alignment/train_dpo.py` | done |
+| Orchestrator (+ adapter reload check, λ=0 vs λ=1 smoke test) | `src/run_m2.py` | done |
 | Set adapter strength λ | `src/alignment/adapters.py` | done |
-| Kaggle notebook (train + real smoke-test generations) | `notebooks/02_alignment_training_kaggle.ipynb` | to write |
+| Kaggle notebook (Kaggle kernel `align-pareto-m2-dpo`, GPU T4) | `notebooks/02_alignment_training_kaggle.ipynb` | written; run with `kaggle/run_on_kaggle.sh m2` |
 
 ### M3: λ sweep + Pareto frontier (§22–24, §35)
 Two axes only (team decision): **safety** and **creativity**. Capability (§22) and uncertainty (§25) are
@@ -54,8 +55,9 @@ left out; they are not in the §35 "must work" list. Diversity is kept as the wa
 | Step | File | State |
 |---|---|---|
 | Safety: harmful refusal rate, benign false-refusal rate | `src/evaluation/safety.py` | to write |
-| Creativity on creative prompts: diversity (1 − mean pairwise cosine), cluster count, novelty | `src/evaluation/creativity.py` | to write |
-| Eval prompt set, N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
+| Creativity on creative prompts: diversity (1 − mean pairwise cosine), semantic cluster count, novelty | `src/evaluation/creativity.py` | to write |
+| Shared eval prompt set (400 prompts from M1 val/test) + protocol for Group B | `src/evaluation/build_eval_set.py`, `docs/EVAL_PROTOCOL.md` | done |
+| N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
 
 ### M4: Adaptive controller (§20)
 | Step | File | State |
@@ -82,4 +84,5 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 python3 run_all.py --verify-only   # check files
 python3 run_all.py                 # run implemented milestones
 pytest tests                       # unit tests (no data download needed)
+kaggle/run_on_kaggle.sh m1         # upload code, run the M1 notebook on Kaggle, copy results back
 ```
