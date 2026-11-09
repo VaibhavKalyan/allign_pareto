@@ -102,16 +102,22 @@ def save_adapter(trainer, tokenizer, adapter_dir: Path) -> Path:
     return adapter_dir
 
 
-def generate(model, tokenizer, prompts: List[str], max_new_tokens: int, enable_thinking: bool = False) -> List[str]:
-    """Greedy replies (deterministic, so differences between models come from the weights only)."""
+def generate(model, tokenizer, prompts: List[str], max_new_tokens: int, enable_thinking: bool = False,
+             temperature: float = 0.0, top_p: float = 1.0, seed: int = 0) -> List[str]:
+    """
+    One reply per prompt: greedy when temperature is 0, else sampled with the RNG reset to `seed` before every prompt,
+    so two models given the same seed draw the same random numbers and differences come from the weights.
+    """
     import torch
     device = next(model.parameters()).device
+    sampling = {"do_sample": True, "temperature": temperature, "top_p": top_p} if temperature > 0 else {"do_sample": False}
     replies = []
     for p in prompts:
         text = render_prompt([{"role": "user", "content": p}], tokenizer, enable_thinking)
         inputs = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
+        torch.manual_seed(seed)
         with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False,
+            out = model.generate(**inputs, max_new_tokens=max_new_tokens, **sampling,
                                  eos_token_id=stop_token_ids(tokenizer), pad_token_id=tokenizer.pad_token_id)
         replies.append(tokenizer.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip())
     return replies

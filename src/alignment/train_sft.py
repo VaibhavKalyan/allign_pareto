@@ -1,6 +1,6 @@
 """
 Stage 1 of M2: supervised fine-tuning of Qwen3-0.6B-Base into a helpful-only chat model.
-A LoRA adapter is trained on hh-rlhf helpful-base chosen replies (loss on the reply only), then merged into the
+A LoRA adapter is trained on human-written helpful replies (sft_data.py; loss on the reply only), then merged into the
 base weights by models.load_sft_model. This model is lambda = 0: it follows instructions but has had no safety
 training, so stage 2 (DPO) isolates the effect of safety alignment.
 """
@@ -18,7 +18,7 @@ def build_sft_dataset(examples: pd.DataFrame, tokenizer, max_length: int, enable
     from datasets import Dataset
     eos = tokenizer.eos_token
     rows, dropped = [], 0
-    for prompt, reply in zip(examples["prompt"], examples["chosen"]):
+    for prompt, reply in zip(examples["prompt"], examples["reply"]):
         prompt_text = render_prompt(prompt, tokenizer, enable_thinking)
         if len(tokenizer(prompt_text + reply + eos, add_special_tokens=False)["input_ids"]) > max_length:
             dropped += 1

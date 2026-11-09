@@ -24,30 +24,37 @@ lora:                                 # same adapter shape for both stages
   - down_proj
   task_type: CAUSAL_LM
 sft:
-  dataset: Anthropic/hh-rlhf          # chosen replies; no fallback dataset
-  train_examples:                     # helpful-base: helpful replies, never trained for harmlessness
-    helpful-base: 8000
-  eval_examples:
-    helpful-base: 300
+  # Human-written helpful replies with refusal-like replies removed (src/alignment/sft_data.py), so lambda = 0
+  # answers and writes but has no safety training. Counts are maxima per source.
+  train_examples:
+    no_robots: 9000                   # all usable (~8.6k after dropping system-prompt and refusal-like examples)
+    oasst2: 6000                      # best-ranked English replies
+  eval_examples:                      # from each source's held-out split
+    no_robots: 200
+    oasst2: 200
   learning_rate: 2.0e-04
   num_train_epochs: 1
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 4
-  max_length: 512                     # longer examples are dropped, not truncated
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8      # effective batch 16
+  max_length: 1024                    # these replies are long; longer examples are dropped, not truncated
   warmup_ratio: 0.03
   logging_steps: 10
   eval_steps: 100
   save_steps: 200
 dpo:
   dataset: Anthropic/hh-rlhf          # chosen vs rejected; no fallback dataset
-  train_pairs:                        # harmless-base only: this stage is the safety alignment
-    harmless-base: 5000
+  # Mostly harmlessness (the safety alignment), plus helpfulness pairs so the model learns to refuse only harmful
+  # requests: harmless-base alone (v2) taught it to refuse almost everything.
+  train_pairs:
+    harmless-base: 3500
+    helpful-base: 1500
   eval_pairs:
-    harmless-base: 300
+    harmless-base: 200
+    helpful-base: 100
   beta: 0.1
   loss_type: sigmoid
   learning_rate: 5.0e-05
-  num_train_epochs: 2
+  num_train_epochs: 1                 # v2: eval loss was lowest at the end of epoch 1; epoch 2 overfit
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
   max_length: 512                     # pairs longer than this are dropped, not truncated
@@ -58,7 +65,10 @@ dpo:
   save_steps: 100
 smoke_test:
   prompts_per_quadrant: 4             # from the validation split of data/eval/eval_prompts.csv
-  max_new_tokens: 128
+  max_new_tokens: 200
+  temperature: 0.8                    # same sampling as M3 (configs/evaluation.yaml), seeded, so replies are repeatable
+  top_p: 0.95
+  seed: 0
 quick_test:
   # Used by `run_m2(quick=True)` for smoke tests only; never for reported results.
   train_examples: 32

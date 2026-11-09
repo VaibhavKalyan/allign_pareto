@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 (SFT + DPO from Qwen3-0.6B-Base) written and tested locally; Kaggle run needed. M3–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2: SFT (λ = 0) on no_robots + oasst2 running on Kaggle; DPO after M3 is set up. M3–M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -41,20 +41,22 @@ Work strictly in order. Do not start a milestone until the previous one has run 
 | Decide whether Dolly `brainstorming` (mostly lists/recommendations) and `creative_writing` letters/emails count as creative | `docs/ANNOTATION_GUIDE.md` | to do (team) |
 
 ### M2: SFT + DPO alignment from the unaligned base model (§18–19)
-`Qwen3-0.6B-Base` (pretrained only) → **SFT** on hh-rlhf helpful-base replies (helpful-only chat model, **λ = 0**)
-→ **DPO** on hh-rlhf harmless-base pairs (safety alignment, **λ = 1**). Both stages are LoRA adapters on float32
-weights; the SFT adapter is merged, the DPO adapter is scaled by λ. Starting from the already-aligned `Qwen3-0.6B`
-(v1, `results/m2_v1_instruct_start/`) gave only a small effect (eval reward accuracy 0.58), because that model is
-already safety-trained.
+`Qwen3-0.6B-Base` (pretrained only) → **SFT** on human-written replies (no_robots + oasst2, refusal-like replies
+removed): helpful-only chat model, **λ = 0** → **DPO** on hh-rlhf pairs: safety alignment, **λ = 1**. Both stages
+are LoRA adapters on float32 weights; the SFT adapter is merged, the DPO adapter is scaled by λ.
+Earlier runs, kept for the report: v1 (`results/m2_v1_instruct_start/`, DPO on the already-aligned Qwen3-0.6B: small
+effect) and v2 (`results/m2_v2_hh_sft/`, SFT on hh-rlhf helpful replies: λ = 0 deflected and looped, λ = 1 refused
+almost everything).
 | Step | File | State |
 |---|---|---|
-| Load hh-rlhf: SFT examples (helpful-base) and DPO pairs (harmless-base); eval prompts excluded | `src/alignment/dpo_data.py` | done |
+| SFT data: no_robots + oasst2, refusal-like replies and eval prompts removed | `src/alignment/sft_data.py` | done |
+| DPO data: hh-rlhf pairs; entry point for both stages' data | `src/alignment/dpo_data.py` | done |
 | Model loading (base, base + merged SFT, + DPO adapter), chat template, generation | `src/alignment/models.py` | done |
 | Stage 1: SFT, loss on the reply only | `src/alignment/train_sft.py` | done |
 | Stage 2: DPO, reference policy = SFT model | `src/alignment/train_dpo.py` | done |
-| Orchestrator (+ reload check, base vs λ=0 vs λ=1 smoke test) | `src/run_m2.py` | done |
+| Orchestrator (`--stages sft` / `sft,dpo`; reload check; smoke test) | `src/run_m2.py` | done |
 | Set adapter strength λ | `src/alignment/adapters.py` | done |
-| Kaggle notebook (kernel `align-pareto-m2-dpo`, GPU T4, ~1.5–2 h) | `notebooks/02_alignment_training_kaggle.ipynb` | run needed |
+| Kaggle notebook (kernel `align-pareto-m2-dpo`, GPU T4) | `notebooks/02_alignment_training_kaggle.ipynb` | SFT run in progress |
 
 ### M3: λ sweep + Pareto frontier (§22–24, §35)
 Two axes only (team decision): **safety** and **creativity**. Capability (§22) and uncertainty (§25) are

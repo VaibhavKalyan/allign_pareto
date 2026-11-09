@@ -1,8 +1,7 @@
 """
-hh-rlhf data for both M2 stages (spec §18): SFT examples and DPO preference pairs.
+hh-rlhf preference pairs for M2 stage 2 (DPO, spec §18), and the entry point that loads both stages' data.
 Loads Anthropic/hh-rlhf transcripts and turns each pair into (prompt messages, chosen reply, rejected reply).
 The prompt is the shared conversation up to the last assistant turn; the replies are that last turn.
-SFT uses (prompt, chosen reply) only.
 No fallback dataset: if hh-rlhf cannot be loaded the pipeline stops (spec §29.12).
 """
 import re
@@ -92,23 +91,24 @@ def load_hh_pairs(counts: Dict[str, int], split: str, raw_dir: Path, excluded: f
     return pd.concat(parts).sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
 
-def load_stage_data(cfg: Dict, raw_dir: Path, eval_prompts_path: Optional[Path] = None) -> Tuple[Dict[str, pd.DataFrame], Dict]:
+def load_stage_data(cfg: Dict, raw_dir: Path, eval_prompts_path: Optional[Path] = None, stages=("sft", "dpo")) -> Tuple[Dict[str, pd.DataFrame], Dict]:
     """
-    hh-rlhf data for both M2 stages, as set in configs/alignment.yaml:
-      sft_train / sft_eval: chosen replies only (helpful-base: helpful, not safety-trained)
-      dpo_train / dpo_eval: chosen vs rejected pairs (harmless-base: the safety alignment)
-    Each SFT example and DPO pair is a different conversation (different subsets, or disjoint samples of one).
+    Training data for the M2 stages, as set in configs/alignment.yaml:
+      sft_train / sft_eval: human-written helpful replies (no_robots, oasst2; see sft_data.py)
+      dpo_train / dpo_eval: hh-rlhf chosen vs rejected pairs (the safety alignment)
     """
+    from src.alignment.sft_data import load_sft_examples
+
     seed = int(cfg.get("seed", 42))
     excluded = eval_prompt_set(eval_prompts_path)
-    meta = {"dataset": HH_REPO, "excluded_eval_prompts": len(excluded)}
+    meta = {"excluded_eval_prompts": len(excluded)}
     data = {}
-    for stage, (train_key, eval_key) in {"sft": ("train_examples", "eval_examples"), "dpo": ("train_pairs", "eval_pairs")}.items():
-        scfg = cfg[stage]
-        data[f"{stage}_train"] = load_hh_pairs(scfg[train_key], "train", raw_dir, excluded, seed, meta)
-        data[f"{stage}_eval"] = load_hh_pairs(scfg[eval_key], "test", raw_dir, excluded, seed + 1, meta)
-    for split in ("train", "eval"):
-        overlap = set(data[f"sft_{split}"]["pair_id"]) & set(data[f"dpo_{split}"]["pair_id"])
-        if overlap:
-            raise ValueError(f"{len(overlap)} hh-rlhf conversations are in both the SFT and DPO {split} data")
+    if "sft" in stages:
+        scfg = cfg["sft"]
+        data["sft_train"] = load_sft_examples(scfg["train_examples"], "train", raw_dir, excluded, seed, meta.setdefault("sft", {}))
+        data["sft_eval"] = load_sft_examples(scfg["eval_examples"], "test", raw_dir, excluded, seed, meta["sft"])
+    if "dpo" in stages:
+        dcfg = cfg["dpo"]
+        data["dpo_train"] = load_hh_pairs(dcfg["train_pairs"], "train", raw_dir, excluded, seed, meta.setdefault("dpo", {"dataset": HH_REPO}))
+        data["dpo_eval"] = load_hh_pairs(dcfg["eval_pairs"], "test", raw_dir, excluded, seed, meta["dpo"])
     return data, meta
