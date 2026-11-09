@@ -1,0 +1,1 @@
+"""ALIGN-PARETO package module."""

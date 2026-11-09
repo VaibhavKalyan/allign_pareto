@@ -19,6 +19,7 @@ from src.data.mapping import (
 )
 from src.data.cleaning import clean_dataset, normalize_prompt_text
 from src.data.dedup import (
+    compute_sha256,
     exact_deduplicate, near_deduplicate_minhash, assign_prompt_families, leakage_safe_family_split, drop_near_duplicates_of,
 )
 from src.classifier.train import select_embedder_and_C, train_dual_head_classifier
@@ -151,8 +152,22 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
     # 2. Labels + provenance; WildGuardTest is kept aside as an external evaluation set
     combined = pd.concat([map_dolly_to_schema(dolly_raw), map_wildguard_to_schema(wg_raw)], ignore_index=True)
     wg_test = map_wildguard_to_schema(wg_test_raw, id_prefix="wgtest")
-    # Held-out evaluation prompts (WildGuardTest + XSTest) must never reach training or threshold tuning
+    # Held-out evaluation prompts (WildGuardTest + XSTest + the shared M3/M4 / Group B eval set) must never
+    # reach the classifier's data (spec §13). The shared set is frozen (configs/evaluation.yaml eval_set.version).
     heldout_prompts = wg_test["prompt"].tolist() + xstest["prompt"].astype(str).tolist()
+    heldout_sets = ["wildguardtest", "xstest"]
+    eval_set_rel = dcfg.get("heldout_eval_set")
+    eval_prompts = []
+    if eval_set_rel:
+        eval_path = root_dir / eval_set_rel
+        if not eval_path.exists():
+            raise FileNotFoundError(
+                f"Shared eval set {eval_path} is configured (data.heldout_eval_set) but missing; on Kaggle, upload "
+                "data/eval/ with the code dataset. Without it, eval prompts could leak into classifier training."
+            )
+        eval_prompts = pd.read_csv(eval_path)["prompt"].astype(str).tolist()
+        heldout_prompts += eval_prompts
+        heldout_sets.append(f"shared_eval_set ({eval_set_rel}, {len(eval_prompts)} prompts)")
 
     # 3-4. Clean (dropping any held-out prompt), exact-dedup, drop rows with unknown labels
     cleaned, clean_stats = clean_dataset(combined, min_char_len=int(dcfg["min_char_len"]), benchmark_prompts=heldout_prompts)
@@ -182,6 +197,12 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         fiction_for_split = fiction_for_split.sample(min(300, len(fiction_for_split)), random_state=seed)
     final_df, split_info = _build_split(labelled, dcfg, targets, split_seed=seed, minhash_seed=seed, safety_only=fiction_for_split)
 
+    # Leakage check: no shared eval prompt may appear anywhere in the classifier dataset
+    if eval_prompts:
+        eval_hashes = {compute_sha256(normalize_prompt_text(p)) for p in eval_prompts}
+        n_eval_in_data = int(final_df["prompt_sha256"].isin(eval_hashes).sum())
+        if n_eval_in_data:
+            raise AssertionError(f"{n_eval_in_data} shared eval prompts are in the classifier dataset")
     save_parquet(final_df, processed_dir / "classifier_dataset.parquet")
     train_df = final_df[final_df["split"] == "train"].reset_index(drop=True)
     val_df = final_df[final_df["split"] == "validation"].reset_index(drop=True)
@@ -199,7 +220,7 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         "exact_duplicates_removed": n_exact,
         "unassigned_label_stats": unassigned_stats,
         "heldout_near_duplicates_removed": {
-            "heldout_sets": ["wildguardtest", "xstest"], "threshold": heldout_thr,
+            "heldout_sets": heldout_sets, "threshold": heldout_thr,
             "labelled_pool": n_heldout_near, "fictional_framing_pool": n_fiction_heldout,
         },
         "labelled_pool_before_sampling": pool_stats,

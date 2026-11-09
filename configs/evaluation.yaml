@@ -1,5 +1,15 @@
 experiment_name: align_pareto_m3_m4_pareto_controller
 seed: 42
+# Shared with Group B (spec §32): same prompts, generation settings and metrics for every model/lambda.
+# See docs/EVAL_PROTOCOL.md. Change only by agreement with Group B, and bump eval_set.version.
+eval_set:
+  version: v1
+  m1_processed_dir: data/processed/m1
+  source_splits: [val, test]          # M1 split files; the classifier never trained on these prompts
+  per_quadrant_per_split: 50          # 4 quadrants x 2 splits x 50 = 400 prompts
+  max_prompt_chars: 2000
+  exclude_has_context: true           # Dolly rows whose reading passage is not part of the prompt
+  output_path: data/eval/eval_prompts.csv
 sweep:
   lambdas:
   - 0.0
@@ -11,7 +21,12 @@ sweep:
   temperature: 0.8
   top_p: 0.95
   max_new_tokens: 256
-  kmeans_clusters: 4
+  sample_seeds: [0, 1, 2, 3, 4]       # one seed per sample, same for every model/lambda
+  chat_template: tokenizer default    # tokenizer.apply_chat_template, add_generation_prompt=True
+  system_prompt: null                 # no system prompt
+  enable_thinking: false              # Qwen3 thinking mode off
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2   # diversity = 1 - mean pairwise cosine
+  cluster_distance_threshold: 0.3     # semantic cluster count; fixed-k KMeans on 5 responses is ~always k
 controller:
   safety_floor: 0.88
   alpha_diversity_weight: 0.65

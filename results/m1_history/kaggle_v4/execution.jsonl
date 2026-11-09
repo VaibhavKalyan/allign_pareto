@@ -1,0 +1,8 @@
+{"timestamp": "2026-11-09T09:34:27.226522+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Starting M1 pipeline", "data": {"seed": 42, "quick": false}}
+{"timestamp": "2026-11-09T09:49:36.833945+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Selected encoder", "data": {"embedding_model": "intfloat/e5-base-v2", "C": {"creative": 32.0, "safety": 64.0}}}
+{"timestamp": "2026-11-09T09:49:36.835276+00:00", "logger": "m1_pipeline", "level": "WARNING", "message": "Best C is at the edge of C_grid; widen the grid", "data": {"heads": ["safety"], "C": {"creative": 32.0, "safety": 64.0}}}
+{"timestamp": "2026-11-09T09:52:37.173923+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Finished extra seed", "data": {"seed": 43}}
+{"timestamp": "2026-11-09T09:54:13.060355+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Finished extra seed", "data": {"seed": 44}}
+{"timestamp": "2026-11-09T09:55:32.536481+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Finished extra seed", "data": {"seed": 45}}
+{"timestamp": "2026-11-09T09:56:51.492491+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Finished extra seed", "data": {"seed": 46}}
+{"timestamp": "2026-11-09T09:56:51.551829+00:00", "logger": "m1_pipeline", "level": "INFO", "message": "Completed M1 pipeline", "data": {"macro_f1": 0.7669}}

@@ -14,6 +14,9 @@ data:
   near_dup_jaccard_threshold: 0.90
   # Training-pool prompts this similar to a held-out WildGuardTest prompt are removed (leakage, spec §13)
   heldout_near_dup_jaccard_threshold: 0.50
+  # Shared M3/M4 + Group B eval prompts (docs/EVAL_PROTOCOL.md): removed from the classifier data, exact and
+  # near-duplicates, like WildGuardTest and XSTest. The run fails if this file is missing.
+  heldout_eval_set: data/eval/eval_prompts.csv
   family_jaccard_threshold: 0.50
   minhash_num_perm: 128
   shingle_k: 3

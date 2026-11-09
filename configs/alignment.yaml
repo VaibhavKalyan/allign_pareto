@@ -1,11 +1,13 @@
 experiment_name: align_pareto_m2_qlora_dpo
 seed: 42
 model:
+  # Already instruction-tuned; the raw pretrained model is Qwen/Qwen3-0.6B-Base (see docs/EVAL_PROTOCOL.md)
   base_model_name: Qwen/Qwen3-0.6B
-  use_4bit_qlora: true
+  use_4bit_qlora: true                # ignored without a CUDA GPU (bitsandbytes needs one)
   bnb_4bit_quant_type: nf4
-  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_compute_dtype: float16     # Kaggle T4/P100 have no bfloat16 support
   bnb_4bit_use_double_quant: true
+  enable_thinking: false              # Qwen3 chat template; must match configs/evaluation.yaml
 lora:
   r: 16
   lora_alpha: 32
@@ -17,17 +19,37 @@ lora:
   - o_proj
   task_type: CAUSAL_LM
 dpo:
-  primary_dataset: Anthropic/hh-rlhf
-  fallback_dataset: Intel/orca_dpo_pairs
+  dataset: Anthropic/hh-rlhf          # no fallback dataset: a load failure stops the run
+  # Pairs sampled per hh-rlhf subset. Mostly harmlessness, since M3 measures what safety alignment
+  # costs; some helpfulness so the model is not trained only to refuse.
+  train_pairs:
+    harmless-base: 3500
+    helpful-base: 1500
+  eval_pairs:                         # from the hh-rlhf test files
+    harmless-base: 200
+    helpful-base: 100
   beta: 0.1
   loss_type: sigmoid
   learning_rate: 5.0e-05
-  num_train_epochs: 3
+  num_train_epochs: 1                 # start with 1 (README); raise only if the reward margin is still climbing
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
-  max_length: 512
+  max_length: 512                     # pairs longer than this are dropped, not truncated
   max_prompt_length: 256
   warmup_ratio: 0.1
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 100
+smoke_test:
+  prompts_per_quadrant: 2             # from the validation split of data/eval/eval_prompts.csv
+  max_new_tokens: 128
+quick_test:
+  # Used by `run_m2(quick=True)` for smoke tests only; never for reported results.
+  train_pairs: 32
+  eval_pairs: 8
+  max_steps: 3
+  max_length: 256
+  max_prompt_length: 128
 lambda_interpolation:
   formula: W_lambda = W_base + lambda * (alpha / r) * (B @ A)
   default_grid:

@@ -14,6 +14,7 @@
       "min_char_len": 15,
       "near_dup_jaccard_threshold": 0.9,
       "heldout_near_dup_jaccard_threshold": 0.5,
+      "heldout_eval_set": "data/eval/eval_prompts.csv",
       "family_jaccard_threshold": 0.5,
       "minhash_num_perm": 128,
       "shingle_k": 3,
@@ -96,31 +97,31 @@
     "embedding_prefix": "query: ",
     "embedding_dim": 768,
     "C": {
-      "creative": 32.0,
-      "safety": 64.0
+      "creative": 16.0,
+      "safety": 8.0
     },
-    "train_samples": 17472,
-    "val_samples": 2179,
-    "creative_head_train_samples": 11222,
-    "safety_head_train_samples": 17472,
+    "train_samples": 17444,
+    "val_samples": 2168,
+    "creative_head_train_samples": 11191,
+    "safety_head_train_samples": 17444,
     "creative_platt_scale": [
       0.9239,
-      -0.8099
+      -0.825
     ],
     "safety_platt_scale": [
-      0.9044,
-      -0.5526
+      1.0803,
+      -0.5253
     ],
     "thresholds": {
-      "creative": 0.42,
-      "val_f1_creative": 0.797,
-      "safety": 0.15,
+      "creative": 0.43,
+      "val_f1_creative": 0.7855,
+      "safety": 0.14,
       "safety_objective": "target_recall",
       "safety_target_recall": 0.95,
-      "val_recall_safety": 0.9524,
-      "val_precision_safety": 0.641,
-      "safety_max_f1_threshold": 0.44,
-      "val_f1_safety_at_max_f1_threshold": 0.8209
+      "val_recall_safety": 0.9506,
+      "val_precision_safety": 0.6283,
+      "safety_max_f1_threshold": 0.47,
+      "val_f1_safety_at_max_f1_threshold": 0.8204
     }
   },
   "dataset_versions": {

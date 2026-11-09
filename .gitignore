@@ -12,3 +12,6 @@ data/metadata/*
 !**/.gitkeep
 _archive/
 models/
+
+# Office lock files
+.~lock*
