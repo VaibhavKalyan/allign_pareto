@@ -1,0 +1,7 @@
+{
+  "minutes": 82.1,
+  "eval_loss": 1.8960193395614624,
+  "eval_entropy": 1.8881300777817767,
+  "eval_mean_token_accuracy": 0.5769657989343008,
+  "eval_num_tokens": 4508608.0
+}

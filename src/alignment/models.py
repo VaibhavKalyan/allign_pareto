@@ -1,10 +1,7 @@
 """
 Model loading and generation shared by M2 (training) and M3/M4 (lambda sweep).
-
-The aligned model is built in three layers (spec §18-19):
-  Qwen3-0.6B-Base (pretrained only)
-  + SFT LoRA adapter, merged      -> helpful-only chat model   (lambda = 0)
-  + DPO LoRA adapter, scaled by lambda                       -> safety-aligned at lambda = 1
+  Qwen3-0.6B-Base (pretrained only) + SFT LoRA adapter, merged -> helpful-only chat model (lambda = 0)
+The aligned endpoint (lambda = 1) is Qwen's Qwen3-0.6B; src/alignment/interpolate.py blends the two.
 Weights stay in float32 (a 0.6B model fits a T4); matrix multiplies run in fp16 under autocast during training.
 """
 import inspect
@@ -12,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 END_OF_TEXT = "<|endoftext|>"
+END_OF_REPLY = "<|im_end|>"
 
 
 def has_cuda() -> bool:
@@ -20,17 +18,22 @@ def has_cuda() -> bool:
 
 
 def load_tokenizer(mcfg: Dict):
-    """Tokenizer of the chat model: same vocabulary as the base model, plus the chat template and <|im_end|> as EOS."""
+    """
+    Tokenizer of the chat model (same vocabulary as the base model, plus the chat template). Its EOS, which SFT and
+    DPO append to every training reply, is set to `end_of_reply_token`: the base model's <|im_end|> row is untrained
+    (norm ~0.35 vs ~1.0) and LoRA cannot train it, so a model taught to end with <|im_end|> never stops.
+    """
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(mcfg["tokenizer_name"])
+    tokenizer.eos_token = mcfg.get("end_of_reply_token", tokenizer.eos_token)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = END_OF_TEXT
     return tokenizer
 
 
 def stop_token_ids(tokenizer) -> List[int]:
-    """Generation stops at <|im_end|> (end of reply) or <|endoftext|>."""
-    return sorted({tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids(END_OF_TEXT)})
+    """Generation stops at <|im_end|> (Qwen's chat models) or <|endoftext|> (our SFT model), whichever comes first."""
+    return sorted({tokenizer.convert_tokens_to_ids(t) for t in (END_OF_REPLY, END_OF_TEXT)} | {tokenizer.eos_token_id})
 
 
 def load_base_model(mcfg: Dict):
@@ -41,17 +44,10 @@ def load_base_model(mcfg: Dict):
 
 
 def load_sft_model(mcfg: Dict, sft_adapter_dir: Path):
-    """Base model with the SFT adapter merged into its weights: the helpful-only starting point for DPO (lambda = 0)."""
+    """Base model with the SFT adapter merged into its weights: the helpful-only chat model."""
     from peft import PeftModel
     return PeftModel.from_pretrained(load_base_model(mcfg), str(sft_adapter_dir)).merge_and_unload()
 
-
-def load_aligned_model(mcfg: Dict, sft_adapter_dir: Path, dpo_adapter_dir: Path):
-    """SFT model with the DPO adapter attached; set its strength with adapters.set_peft_lora_lambda."""
-    from peft import PeftModel
-    model = PeftModel.from_pretrained(load_sft_model(mcfg, sft_adapter_dir), str(dpo_adapter_dir))
-    model.eval()
-    return model
 
 
 def lora_config(lcfg: Dict):

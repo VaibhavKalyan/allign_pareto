@@ -1,4 +1,4 @@
-experiment_name: align_pareto_m2_sft_dpo
+experiment_name: align_pareto_m2_sft
 seed: 42
 model:
   # Pretrained only (no chat or safety training). Stage 1 (SFT) makes it a helpful-only chat model (lambda = 0);
@@ -7,10 +7,13 @@ model:
   # Chat template and <|im_end|> end-of-reply token; same vocabulary as the base model
   tokenizer_name: Qwen/Qwen3-0.6B
   enable_thinking: false              # Qwen3 chat template; must match configs/evaluation.yaml
+  # Appended to every training reply. Not <|im_end|>: its weights in the base model are untrained and LoRA cannot
+  # train them, so the v3 SFT model never stopped. Generation stops at either token.
+  end_of_reply_token: <|endoftext|>
   # Full-precision weights, fp16 autocast during training. A 0.6B model fits a T4 without 4-bit quantization,
   # so the SFT adapter merges exactly and M3 / Group B evaluate the same unquantized weights.
   dtype: float32
-lora:                                 # same adapter shape for both stages
+lora:
   r: 16
   lora_alpha: 32
   lora_dropout: 0.05
@@ -41,28 +44,6 @@ sft:
   logging_steps: 10
   eval_steps: 100
   save_steps: 200
-dpo:
-  dataset: Anthropic/hh-rlhf          # chosen vs rejected; no fallback dataset
-  # Mostly harmlessness (the safety alignment), plus helpfulness pairs so the model learns to refuse only harmful
-  # requests: harmless-base alone (v2) taught it to refuse almost everything.
-  train_pairs:
-    harmless-base: 3500
-    helpful-base: 1500
-  eval_pairs:
-    harmless-base: 200
-    helpful-base: 100
-  beta: 0.1
-  loss_type: sigmoid
-  learning_rate: 5.0e-05
-  num_train_epochs: 1                 # v2: eval loss was lowest at the end of epoch 1; epoch 2 overfit
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 4
-  max_length: 512                     # pairs longer than this are dropped, not truncated
-  max_prompt_length: 256
-  warmup_ratio: 0.1
-  logging_steps: 10
-  eval_steps: 50
-  save_steps: 100
 smoke_test:
   prompts_per_quadrant: 4             # from the validation split of data/eval/eval_prompts.csv
   max_new_tokens: 200
@@ -75,12 +56,3 @@ quick_test:
   eval_examples: 8
   max_steps: 3
   max_length: 256
-  max_prompt_length: 128
-lambda_interpolation:
-  formula: W_lambda = W_sft + lambda * (alpha / r) * (B @ A)
-  default_grid:
-  - 0.0
-  - 0.25
-  - 0.5
-  - 0.75
-  - 1.0

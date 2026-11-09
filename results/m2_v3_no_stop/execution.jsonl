@@ -1,0 +1,6 @@
+{"timestamp": "2026-11-09T12:51:46.369174+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Starting M2 pipeline", "data": {"seed": 42, "quick": false, "stages": ["sft"], "cuda": true, "base_model": "Qwen/Qwen3-0.6B-Base"}}
+{"timestamp": "2026-11-09T12:52:28.561436+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Training data ready", "data": {"used": {"sft_train": 14217, "sft_eval": 384}, "dropped_over_length": {"sft_train": 411, "sft_eval": 16}}}
+{"timestamp": "2026-11-09T14:14:50.288124+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "SFT finished", "data": {"minutes": 82.1, "eval_loss": 1.8960193395614624}}
+{"timestamp": "2026-11-09T14:14:52.954930+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Adapter reload check", "data": {"max_abs_logit_diff_sft_trained_vs_reloaded": 0.018433}}
+{"timestamp": "2026-11-09T14:19:36.205590+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Smoke test", "data": {"n_prompts": 16}}
+{"timestamp": "2026-11-09T14:19:36.231403+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Completed M2 pipeline", "data": {"stages": ["sft"]}}

@@ -1,0 +1,6 @@
+{"timestamp": "2026-11-09T17:46:01.849218+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Starting M2 pipeline (SFT only)", "data": {"seed": 42, "quick": false, "cuda": true, "base_model": "Qwen/Qwen3-0.6B-Base"}}
+{"timestamp": "2026-11-09T17:46:43.958366+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Training data ready", "data": {"used": {"sft_train": 14217, "sft_eval": 384}, "dropped_over_length": {"sft_train": 411, "sft_eval": 16}, "end_of_reply_token": "<|endoftext|>"}}
+{"timestamp": "2026-11-09T19:11:20.710832+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "SFT finished", "data": {"minutes": 84.6, "eval_loss": 1.8229341506958008}}
+{"timestamp": "2026-11-09T19:11:23.051359+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Adapter reload check", "data": {"max_abs_logit_diff_sft_trained_vs_reloaded": 0.015263}}
+{"timestamp": "2026-11-09T19:15:28.161541+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Smoke test", "data": {"n_prompts": 16, "max_new_tokens": 200, "base_model": {"share_stopped": 0.125, "share_stray_chars": 0.812, "mean_reply_tokens": 189.2}, "sft": {"share_stopped": 0.625, "share_stray_chars": 0.0, "mean_reply_tokens": 138.4}}}
+{"timestamp": "2026-11-09T19:15:28.187819+00:00", "logger": "m2_pipeline", "level": "INFO", "message": "Completed M2 pipeline (SFT only)"}

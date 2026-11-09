@@ -1,0 +1,31 @@
+# Moved out of configs/alignment.yaml when DPO was dropped (M2 v4 is SFT only)
+dpo:
+  dataset: Anthropic/hh-rlhf          # chosen vs rejected; no fallback dataset
+  # Mostly harmlessness (the safety alignment), plus helpfulness pairs so the model learns to refuse only harmful
+  # requests: harmless-base alone (v2) taught it to refuse almost everything.
+  train_pairs:
+    harmless-base: 3500
+    helpful-base: 1500
+  eval_pairs:
+    harmless-base: 200
+    helpful-base: 100
+  beta: 0.1
+  loss_type: sigmoid
+  learning_rate: 5.0e-05
+  num_train_epochs: 1                 # v2: eval loss was lowest at the end of epoch 1; epoch 2 overfit
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  max_length: 512                     # pairs longer than this are dropped, not truncated
+  max_prompt_length: 256
+  warmup_ratio: 0.1
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 100
+lambda_interpolation:
+  formula: W_lambda = W_sft + lambda * (alpha / r) * (B @ A)
+  default_grid:
+  - 0.0
+  - 0.25
+  - 0.5
+  - 0.75
+  - 1.0

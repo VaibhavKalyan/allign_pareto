@@ -1,0 +1,43 @@
+{
+  "quick_test": false,
+  "base_model": "Qwen/Qwen3-0.6B-Base",
+  "stages": [
+    "sft"
+  ],
+  "end_of_reply_token": "<|endoftext|>",
+  "reload_check": {
+    "max_abs_logit_diff_sft_trained_vs_reloaded": 0.015263
+  },
+  "sft": {
+    "trained_this_run": true,
+    "train_steps": 889,
+    "train_loss": {
+      "first": 1.8455,
+      "last": 1.8153
+    },
+    "train_token_accuracy": {
+      "first": 0.5693,
+      "last": 0.5776
+    },
+    "final_eval": {
+      "eval_loss": 1.8229,
+      "eval_entropy": 1.8201,
+      "eval_mean_token_accuracy": 0.5842,
+      "eval_num_tokens": 4508608.0
+    }
+  },
+  "smoke_test": {
+    "n_prompts": 16,
+    "max_new_tokens": 200,
+    "base_model": {
+      "share_stopped": 0.125,
+      "share_stray_chars": 0.812,
+      "mean_reply_tokens": 189.2
+    },
+    "sft": {
+      "share_stopped": 0.625,
+      "share_stray_chars": 0.0,
+      "mean_reply_tokens": 138.4
+    }
+  }
+}

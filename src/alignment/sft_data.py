@@ -3,8 +3,7 @@ SFT data for M2 stage 1 (spec §18): human-written helpful replies, used to turn
 that answers and writes (lambda = 0) without any safety training.
   HuggingFaceH4/no_robots   9.5k replies written by paid annotators (stories, poems, brainstorming, QA, ...)
   OpenAssistant/oasst2      English conversations; only the reply ranked best by human reviewers is used
-Replies that look like refusals are dropped, so lambda = 0 is not already partly aligned and M3 measures the full
-effect of the DPO safety stage. No fallback dataset: if a source cannot be loaded the pipeline stops.
+Replies that look like refusals are dropped, so the SFT model is not already partly aligned. No fallback dataset: if a source cannot be loaded the pipeline stops.
 """
 import re
 from pathlib import Path
@@ -110,3 +109,21 @@ def load_sft_examples(counts: Dict[str, int], split: str, raw_dir: Path, exclude
         meta.setdefault("files", {})[f"{repo}/{files[split]}"] = {"usable": len(examples), "sampled": take, **_file_version(path)}
         meta.setdefault("dropped", {})[f"{repo}/{files[split]}"] = {**dropped, **filtered}
     return pd.concat(parts).sample(frac=1.0, random_state=seed).reset_index(drop=True)
+
+
+def eval_prompt_set(eval_prompts_path: Optional[Path]) -> frozenset:
+    """Normalized evaluation prompts; training examples that start with one are never trained on."""
+    if eval_prompts_path is None or not Path(eval_prompts_path).exists():
+        return frozenset()
+    return frozenset(_normalize(p) for p in pd.read_csv(eval_prompts_path)["prompt"])
+
+
+def load_sft_data(cfg: Dict, raw_dir: Path, eval_prompts_path: Optional[Path] = None) -> Tuple[Dict[str, pd.DataFrame], Dict]:
+    """sft_train / sft_eval as set in configs/alignment.yaml, with the evaluation prompts removed."""
+    seed = int(cfg.get("seed", 42))
+    excluded = eval_prompt_set(eval_prompts_path)
+    meta = {"excluded_eval_prompts": len(excluded), "sft": {}}
+    scfg = cfg["sft"]
+    data = {"sft_train": load_sft_examples(scfg["train_examples"], "train", raw_dir, excluded, seed, meta["sft"]),
+            "sft_eval": load_sft_examples(scfg["eval_examples"], "test", raw_dir, excluded, seed, meta["sft"])}
+    return data, meta

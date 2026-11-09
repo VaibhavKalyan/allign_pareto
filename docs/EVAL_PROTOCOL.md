@@ -7,47 +7,47 @@ into one table (spec §21, §32). Settings live in `configs/evaluation.yaml`; ch
 ## 1. What we measure
 
 The project asks what safety alignment costs in creativity, and whether a prompt-adaptive alignment strength λ can
-keep safety while losing less creativity. Three model conditions are evaluated:
+keep safety while losing less creativity. λ blends the weights of an unaligned and an aligned model:
 
 ```
-Qwen3-0.6B-Base  (pretrained only: a text completer, cannot chat)
-   │  Group A, M2 stage 1: SFT on helpful-only hh-rlhf replies
-   ▼
-sft-helpful-only  ── follows instructions, no safety training ────────── λ = 0   (unaligned baseline)
-   │  Group A, M2 stage 2: DPO on hh-rlhf harmless-base pairs, LoRA adapter scaled by λ
-   ▼
-sft-dpo @ λ       ── same model plus λ × the safety update ──────────── λ = 0.25 … 1
-
-qwen3-instruct    ── Qwen/Qwen3-0.6B: Qwen's own chat + safety training (an existing aligned model)
+                         Qwen3-0.6B-Base  (pretrained only: a text completer, cannot chat)
+                     Group A, M2: SFT ┘                 └ Qwen's own post-training (chat + safety)
+sft-helpful-only  ── answers, no safety training ──── λ = 0   (unaligned endpoint)
+sft-to-instruct   ── W(λ) = W_sft + λ · (W_qwen3 − W_sft) ── λ = 0.25, 0.5, 0.75
+qwen3-instruct    ── Qwen/Qwen3-0.6B, an existing aligned model ── λ = 1   (aligned endpoint)
 ```
+
+Both endpoints start from the same Base weights, which keeps the blended models coherent (model averaging, as in
+*Mitigating the Alignment Tax of RLHF*). Code: `src/alignment/interpolate.py`.
 
 | Comparison | Question it answers | Who |
 |---|---|---|
 | `sft-helpful-only` vs `qwen3-instruct` | How does an existing, professionally aligned model differ from an unaligned one? (spec Q1–Q3) | Group B |
-| `sft-dpo` at λ = 0 … 1 | How do safety and creativity change as alignment strength grows? The Pareto frontier. (Q4) | Group A, M3 |
+| λ = 0 … 1 | How do safety and creativity change along the way from unaligned to aligned? The Pareto frontier. (Q4) | Group A, M3 |
 | adaptive λ vs λ = 0, 0.5, 1 | Can choosing λ per prompt keep safety while losing less creativity? (Q5–Q6) | Group A, M4 |
 
 **How to read the comparisons.**
-- Between `sft-helpful-only` and `sft-dpo`, only the safety training differs (same base, same SFT), so differences
-  are the effect of alignment.
-- `qwen3-instruct` also differs in its instruction tuning (Qwen's is much larger and better than our 8k-example
-  SFT). Differences between it and `sft-helpful-only` are alignment **plus** general chat quality; report them
-  that way.
+- `qwen3-instruct` differs from `sft-helpful-only` in more than safety: Qwen's post-training is much larger and also
+  covers chat quality and reasoning. Moving λ from 0 to 1 changes all of these, so differences are alignment **plus**
+  general chat quality; report them that way.
 - **The raw `Qwen3-0.6B-Base` is not evaluated.** It cannot follow the chat format (it answers with garbage such as
-  `⚙ ⚙ ⚙`), so its refusal and diversity numbers would be meaningless. `sft-helpful-only` is the unaligned baseline.
+  `⚙ ⚙ ⚙`), so its refusal and diversity numbers would be meaningless.
+- Before the sweep, `python3 src/check_interpolation.py` confirms that λ = 0 and λ = 1 reproduce the two models
+  exactly and that every λ gives replies that stop and read normally (`results/m3_interp_check/`).
 
 ## 2. Who does what
 
 | Step | Who | Needs |
 |---|---|---|
-| Train the SFT and DPO adapters (M2) | Group A | — |
-| Generate + score `sft-helpful-only` (= λ = 0) and `sft-dpo` at every λ (M3) | Group A | M2 adapters, judge decision |
-| Generate + score `qwen3-instruct` | Group B | judge decision only (can start right away) |
+| Train the SFT adapter (M2) | Group A | done (`results/m2/`) |
+| Generate + score `sft-helpful-only` (λ = 0) and `sft-to-instruct` at 0 < λ < 1 (M3) | Group A | SFT adapter, judge decision |
+| Generate + score `qwen3-instruct` (λ = 1) | Group B | judge decision only (can start right away) |
 | Group B's table: `qwen3-instruct` vs `sft-helpful-only` | Group B | Group A's λ = 0 `raw_responses.jsonl` (reused, not regenerated) |
-| Adaptive controller, final comparison on `test` (M4) | Group A | M3 results, Group B's `qwen3-instruct` results |
+| Adaptive controller, final comparison on `test` (M4) | Group A | M3 results, Group B's `qwen3-instruct` responses (= λ = 1) |
 
-Group B does not need to run the SFT model: Group A's M3 λ = 0 run generates it with exactly these settings. If
-Group B wants to regenerate it (e.g. for token entropy), §4 shows how to load it.
+Each endpoint is generated once: Group B reuses Group A's λ = 0 responses, and Group A reuses Group B's
+`qwen3-instruct` responses as λ = 1. If either group wants to regenerate an endpoint (e.g. for token entropy), §4
+shows how to load it.
 
 ## 3. Prompts — `data/eval/eval_prompts.csv` (version v1, 400 prompts)
 
@@ -72,7 +72,7 @@ WildGuardMix, which is gated: do not post the file publicly.
 
 | Setting | Value |
 |---|---|
-| Models | the three `id`s in `configs/evaluation.yaml` → `models.conditions` (table below) |
+| Models | the `id`s in `configs/evaluation.yaml` → `models` (table below) |
 | Weights | float32 (no quantization) |
 | Chat format | for **every** model, the chat template of the `Qwen/Qwen3-0.6B` tokenizer (the Base tokenizer's template differs; the vocabulary is identical), `add_generation_prompt=True`, no system prompt |
 | Qwen3 | `enable_thinking=False` |
@@ -84,13 +84,13 @@ WildGuardMix, which is gated: do not post the file publicly.
 |---|---|
 | `qwen3-instruct` | `AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-0.6B", dtype=torch.float32)` |
 | `sft-helpful-only` | `src.alignment.models.load_sft_model(cfg["model"], "models/m2/sft_adapter")` |
-| `sft-dpo` at λ | `m = load_aligned_model(cfg["model"], sft_dir, dpo_dir)`, then `set_peft_lora_lambda(m, λ)` |
+| `sft-to-instruct` at λ | `interp = src.alignment.interpolate.InterpolatedModel(cfg["model"], "models/m2/sft_adapter", "Qwen/Qwen3-0.6B")`, then `m = interp.set_lambda(λ)` |
 
 `cfg` is `configs/alignment.yaml`. The prompt text for every model is
 `src.alignment.models.render_prompt([{"role": "user", "content": prompt}], tokenizer)` with
 `tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")`.
 
-The M2 adapters are shared as the private Kaggle dataset `align-pareto-m2-adapters` once M2 has run (Group B members
+The M2 SFT adapter is shared as the private Kaggle dataset `align-pareto-m2-adapters` (`kaggle/publish_adapters.sh`) (Group B members
 are added as collaborators). Code and prompts are in the Kaggle dataset `align-pareto-src`.
 
 ## 5. Metrics
@@ -112,9 +112,9 @@ its own (spec §23): diversity is only measured on creative prompts, and safety 
 One folder per model id (Group B) or per λ (Group A):
 
 - `raw_responses.jsonl`, one line per response:
-  `prompt_id, model, lambda (null for qwen3-instruct), sample_idx, seed, response, n_tokens, mean_token_entropy, is_refusal, harm_label`
+  `prompt_id, model, lambda (0 for sft-helpful-only, 1 for qwen3-instruct), sample_idx, seed, response, n_tokens, mean_token_entropy, is_refusal, harm_label`
 - `metrics.csv`: `model, lambda, split, quadrant, metric, value, n`
-- `experiment_config.json`: seed, model names and revisions (and adapter versions), generation settings, package
+- `experiment_config.json`: seed, model names and revisions (and the SFT adapter version), generation settings, package
   versions, GPU (spec §31)
 
 ## 7. Open decisions (agree before anyone scores)

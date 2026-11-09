@@ -1,0 +1,182 @@
+{
+  "m2_config": {
+    "experiment_name": "align_pareto_m2_sft_dpo",
+    "seed": 42,
+    "model": {
+      "base_model_name": "Qwen/Qwen3-0.6B-Base",
+      "tokenizer_name": "Qwen/Qwen3-0.6B",
+      "enable_thinking": false,
+      "dtype": "float32"
+    },
+    "lora": {
+      "r": 16,
+      "lora_alpha": 32,
+      "lora_dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ],
+      "task_type": "CAUSAL_LM"
+    },
+    "sft": {
+      "train_examples": {
+        "no_robots": 9000,
+        "oasst2": 6000
+      },
+      "eval_examples": {
+        "no_robots": 200,
+        "oasst2": 200
+      },
+      "learning_rate": 0.0002,
+      "num_train_epochs": 1,
+      "per_device_train_batch_size": 2,
+      "gradient_accumulation_steps": 8,
+      "max_length": 1024,
+      "warmup_ratio": 0.03,
+      "logging_steps": 10,
+      "eval_steps": 100,
+      "save_steps": 200
+    },
+    "dpo": {
+      "dataset": "Anthropic/hh-rlhf",
+      "train_pairs": {
+        "harmless-base": 3500,
+        "helpful-base": 1500
+      },
+      "eval_pairs": {
+        "harmless-base": 200,
+        "helpful-base": 100
+      },
+      "beta": 0.1,
+      "loss_type": "sigmoid",
+      "learning_rate": 5e-05,
+      "num_train_epochs": 1,
+      "per_device_train_batch_size": 4,
+      "gradient_accumulation_steps": 4,
+      "max_length": 512,
+      "max_prompt_length": 256,
+      "warmup_ratio": 0.1,
+      "logging_steps": 10,
+      "eval_steps": 50,
+      "save_steps": 100
+    },
+    "smoke_test": {
+      "prompts_per_quadrant": 4,
+      "max_new_tokens": 200,
+      "temperature": 0.8,
+      "top_p": 0.95,
+      "seed": 0
+    },
+    "quick_test": {
+      "train_examples": 32,
+      "eval_examples": 8,
+      "max_steps": 3,
+      "max_length": 256,
+      "max_prompt_length": 128
+    },
+    "lambda_interpolation": {
+      "formula": "W_lambda = W_sft + lambda * (alpha / r) * (B @ A)",
+      "default_grid": [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0
+      ]
+    }
+  },
+  "data": {
+    "excluded_eval_prompts": 400,
+    "sft": {
+      "files": {
+        "HuggingFaceH4/no_robots/data/train-00000-of-00001.parquet": {
+          "usable": 8628,
+          "sampled": 8628,
+          "sha256": "76d64120a2ab20eb85d6b22bdced5b1ec638a6213a97004741006745c92489ef",
+          "hf_revision": "e6f9a4ac5c37faeb744ba9ecf0473184d7f8105b"
+        },
+        "OpenAssistant/oasst2/data/train-00000-of-00001-88ba0162028a73fc.parquet": {
+          "usable": 11724,
+          "sampled": 6000,
+          "sha256": "9638227b41b0a4fb69afa5d5c4b52e3fb6abfd56c9870d81bae32c9981e769b1",
+          "hf_revision": "179dd21fc55192153d94adb0e0ce8f69e222bf75"
+        },
+        "HuggingFaceH4/no_robots/data/test-00000-of-00001.parquet": {
+          "usable": 440,
+          "sampled": 200,
+          "sha256": "60707b2636a46e37bb0c1e9ca263a18553f430317b7a53c691676d6a492fc0f2",
+          "hf_revision": "e6f9a4ac5c37faeb744ba9ecf0473184d7f8105b"
+        },
+        "OpenAssistant/oasst2/data/validation-00000-of-00001-1deeef95c3248fe0.parquet": {
+          "usable": 629,
+          "sampled": 200,
+          "sha256": "fd46c63babc0756909a957ee40975bcf5610d58c5d1ab5ff2c57c0f57be1f273",
+          "hf_revision": "179dd21fc55192153d94adb0e0ce8f69e222bf75"
+        }
+      },
+      "dropped": {
+        "HuggingFaceH4/no_robots/data/train-00000-of-00001.parquet": {
+          "system_prompt": 795,
+          "malformed": 0,
+          "refusal_like": 77,
+          "eval_prompt_overlap": 0
+        },
+        "OpenAssistant/oasst2/data/train-00000-of-00001-88ba0162028a73fc.parquet": {
+          "broken_thread": 8,
+          "refusal_like": 578,
+          "eval_prompt_overlap": 0
+        },
+        "HuggingFaceH4/no_robots/data/test-00000-of-00001.parquet": {
+          "system_prompt": 54,
+          "malformed": 0,
+          "refusal_like": 6,
+          "eval_prompt_overlap": 0
+        },
+        "OpenAssistant/oasst2/data/validation-00000-of-00001-1deeef95c3248fe0.parquet": {
+          "broken_thread": 0,
+          "refusal_like": 33,
+          "eval_prompt_overlap": 0
+        }
+      }
+    },
+    "used": {
+      "sft_train": 14217,
+      "sft_eval": 384
+    },
+    "dropped_over_length": {
+      "sft_train": 411,
+      "sft_eval": 16
+    }
+  },
+  "environment": {
+    "python": "3.13.16",
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "packages": {
+      "numpy": "2.1.3",
+      "pandas": "2.3.3",
+      "scipy": "1.16.3",
+      "scikit-learn": "1.6.1",
+      "torch": "2.11.0+cu130",
+      "transformers": "5.22.2",
+      "sentence-transformers": "5.7.0",
+      "datasketch": null,
+      "huggingface_hub": "1.33.0",
+      "pyarrow": "23.0.1",
+      "matplotlib": "3.10.0",
+      "seaborn": "0.13.2",
+      "peft": "0.21.2",
+      "trl": "1.17.1",
+      "bitsandbytes": null
+    },
+    "gpu": {
+      "name": "Tesla T4",
+      "vram_gb": 15.6,
+      "count": 1
+    }
+  }
+}
