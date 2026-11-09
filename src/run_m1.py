@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.utils.seed import set_global_seed
+from src.utils.seed import environment_info, set_global_seed
 from src.utils.logging import StructuredLogger
 from src.utils.io import load_yaml, save_json, save_parquet, save_pickle
 from src.data.download import load_raw_datasets
@@ -18,24 +18,39 @@ from src.data.mapping import (
     sample_quadrants, creative_rule_audit_sample, verify_label_independence,
 )
 from src.data.cleaning import clean_dataset
-from src.data.dedup import exact_deduplicate, near_deduplicate_minhash, assign_prompt_families, leakage_safe_family_split
+from src.data.dedup import (
+    exact_deduplicate, near_deduplicate_minhash, assign_prompt_families, leakage_safe_family_split, drop_near_duplicates_of,
+)
 from src.classifier.train import train_dual_head_classifier
 from src.classifier.predict import DualHeadPredictor
-from src.classifier.evaluate import compute_binary_metrics, generate_all_m1_plots, tune_threshold
+from src.classifier.evaluate import (
+    compute_binary_metrics, generate_all_m1_plots, tune_threshold, tune_threshold_for_recall, subgroup_metrics,
+)
 
 LABEL_MAPS = {
     "creative_label": {"0": "non_creative", "1": "creative"},
     "safety_label": {"0": "benign", "1": "harmful"},
     "dolly_creative_categories": sorted(DOLLY_CREATIVE),
     "dolly_non_creative_categories": sorted(DOLLY_NON_CREATIVE),
+    "dolly_creative_writing_questions": "creative_writing rows that are plain questions with no creative cue -> excluded (noisy source label)",
     "dolly_safety_label": "0 for all rows (no harm annotation; provisional, see DATASET_DECISION.md)",
     "wildguard_safety_label": "prompt_harm_label: harmful -> 1, unharmful -> 0, missing/conflicting -> excluded",
-    "wildguard_creative_label": "strict rule: explicit creative-artifact request -> 1; fictional framing only -> excluded; else 0",
+    "wildguard_creative_label": (
+        "strict rule: explicit creative-artifact or brainstorming request -> 1; fictional framing only, or "
+        "'narrative' without fiction context -> excluded; else 0"
+    ),
 }
 
 
 def _strip_curves(m: dict) -> dict:
     return {k: v for k, v in m.items() if k != "_curves"}
+
+
+def _prf(m: dict) -> dict:
+    return {k: m[k] for k in ["threshold", "precision", "recall", "f1"]} | {"false_negatives": m["confusion_matrix"]["fn"]}
+
+
+FICTION_RULE = "uncertain_fictional_framing_only"
 
 
 def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
@@ -62,7 +77,16 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
     cleaned, clean_stats = clean_dataset(combined, min_char_len=int(dcfg["min_char_len"]), benchmark_prompts=wg_test["prompt"])
     deduped, n_exact = exact_deduplicate(cleaned)
     audit = creative_rule_audit_sample(deduped, n_per_rule=int(dcfg["creative_rule_audit_per_rule"]), seed=seed)
+    # Prompts with fictional framing only have no creative label, but they are exactly the creative +
+    # sensitive prompts the controller must handle: keep them aside as an extra evaluation slice.
+    fiction_pool = deduped[(deduped["label_rule"] == FICTION_RULE) & deduped["safety_label"].notna()]
     labelled, unassigned_stats = drop_unassigned(deduped)
+
+    # Near-variants of WildGuardTest prompts must not reach training (exact matches were removed above)
+    k, num_perm = int(dcfg["shingle_k"]), int(dcfg["minhash_num_perm"])
+    heldout_thr = float(dcfg.get("heldout_near_dup_jaccard_threshold", dcfg["family_jaccard_threshold"]))
+    labelled, n_heldout_near = drop_near_duplicates_of(labelled, wg_test["prompt"].tolist(), heldout_thr, k, num_perm, seed)
+    fiction_pool, n_fiction_heldout = drop_near_duplicates_of(fiction_pool, wg_test["prompt"].tolist(), heldout_thr, k, num_perm, seed)
     pool_stats = verify_label_independence(labelled)
 
     # 5. Pilot dataset: per-quadrant targets, balanced across sources
@@ -72,7 +96,6 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
     sampled, sampling_report = sample_quadrants(labelled, targets, seed=seed)
 
     # 6. Near-duplicates, prompt families, leakage-safe split
-    k, num_perm = int(dcfg["shingle_k"]), int(dcfg["minhash_num_perm"])
     near_deduped, n_near = near_deduplicate_minhash(sampled, threshold=float(dcfg["near_dup_jaccard_threshold"]), k=k, num_perm=num_perm, seed=seed)
     with_families, family_stats = assign_prompt_families(near_deduped, threshold=float(dcfg["family_jaccard_threshold"]), k=k, num_perm=num_perm, seed=seed)
     indep_stats = verify_label_independence(with_families)
@@ -93,6 +116,7 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         "cleaning_stats": clean_stats,
         "exact_duplicates_removed": n_exact,
         "unassigned_label_stats": unassigned_stats,
+        "wildguardtest_near_duplicates_removed": {"threshold": heldout_thr, "labelled_pool": n_heldout_near, "fictional_framing_pool": n_fiction_heldout},
         "labelled_pool_before_sampling": pool_stats,
         "sampling_report": sampling_report,
         "near_duplicates_removed": n_near,
@@ -102,6 +126,9 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         "source_by_quadrant": {
             f"{q}/{s}": int(n) for (q, s), n in final_df.groupby(["quadrant", "source_dataset"]).size().items()
         },
+        "source_by_split": {
+            f"{sp}/{s}": int(n) for (sp, s), n in final_df.groupby(["split", "source_dataset"]).size().items()
+        },
     }
     save_json(dataset_stats, results_dir / "dataset_statistics.json")
     save_json(LABEL_MAPS, models_dir / "label_maps.json")
@@ -109,10 +136,30 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
     # 7. Train heads, tune thresholds on validation
     embedder, creative_head, safety_head, train_meta, emb = train_dual_head_classifier(train_df, val_df, cfg)
     icfg = cfg["inference"]
-    grid = np.arange(icfg["threshold_grid_min"], icfg["threshold_grid_max"] + 1e-9, icfg["threshold_grid_step"])
+    grid = np.round(np.arange(icfg["threshold_grid_min"], icfg["threshold_grid_max"] + 1e-9, icfg["threshold_grid_step"]), 4)
+    val_p_s = safety_head.predict_proba(emb["val"])[:, 1]
     thr_c, val_f1_c = tune_threshold(val_df["creative_label"], creative_head.predict_proba(emb["val"])[:, 1], grid)
-    thr_s, val_f1_s = tune_threshold(val_df["safety_label"], safety_head.predict_proba(emb["val"])[:, 1], grid)
-    train_meta["thresholds"] = {"creative": thr_c, "safety": thr_s, "val_f1_creative": val_f1_c, "val_f1_safety": val_f1_s}
+    thr_s_f1, val_f1_s = tune_threshold(val_df["safety_label"], val_p_s, grid)
+    s_objective = icfg.get("safety_threshold_objective", "f1")
+    if s_objective == "target_recall":
+        target = float(icfg["safety_target_recall"])
+        thr_rec, _, _ = tune_threshold_for_recall(val_df["safety_label"], val_p_s, grid, target)
+        # Never less recall than the max-F1 threshold would give
+        thr_s = min(thr_rec, thr_s_f1)
+        pred_v = val_p_s >= thr_s
+        y_v = val_df["safety_label"].to_numpy(dtype=int)
+        val_rec_s = round(float((pred_v & (y_v == 1)).sum() / max(1, (y_v == 1).sum())), 4)
+        val_prec_s = round(float((pred_v & (y_v == 1)).sum() / max(1, pred_v.sum())), 4)
+    elif s_objective == "f1":
+        thr_s, target, val_rec_s, val_prec_s = thr_s_f1, None, None, None
+    else:
+        raise ValueError(f"Unknown safety_threshold_objective {s_objective!r} (use 'target_recall' or 'f1')")
+    train_meta["thresholds"] = {
+        "creative": thr_c, "val_f1_creative": val_f1_c,
+        "safety": thr_s, "safety_objective": s_objective, "safety_target_recall": target,
+        "val_recall_safety": val_rec_s, "val_precision_safety": val_prec_s,
+        "safety_max_f1_threshold": thr_s_f1, "val_f1_safety_at_max_f1_threshold": val_f1_s,
+    }
 
     save_pickle({"embedder": embedder, "head": creative_head, "threshold": thr_c, "meta": train_meta}, models_dir / "creative_classifier.pkl")
     save_pickle({"embedder": embedder, "head": safety_head, "threshold": thr_s, "meta": train_meta}, models_dir / "safety_classifier.pkl")
@@ -134,7 +181,47 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
     if quick:
         wg_eval = wg_eval.sample(min(200, len(wg_eval)), random_state=seed).reset_index(drop=True)
     wg_probs = np.array([p["safety_probability"] for p in predictor.predict_batch(wg_eval["prompt"].tolist())])
-    wg_metrics = compute_binary_metrics(wg_eval["safety_label"].astype(int).to_numpy(), wg_probs, threshold=thr_s)
+    wg_y = wg_eval["safety_label"].astype(int).to_numpy()
+    wg_metrics = compute_binary_metrics(wg_y, wg_probs, threshold=thr_s)
+    wg_eval = wg_eval.assign(safety_probability=wg_probs, safety_pred=(wg_probs >= thr_s).astype(int))
+
+    # Same numbers at the max-F1 safety threshold, so the cost of the recall-first choice is visible
+    test_s_prob = pred_df["safety_probability"].to_numpy()
+    threshold_comparison = {
+        name: {
+            "test": _prf(compute_binary_metrics(test_df["safety_label"].to_numpy(), test_s_prob, threshold=t)),
+            "wildguardtest": _prf(compute_binary_metrics(wg_y, wg_probs, threshold=t)),
+        }
+        for name, t in [("chosen", thr_s), ("max_f1", thr_s_f1)]
+    }
+
+    # 9b. Fictional-framing slice: never trained on, safety labels known, creative labels left for humans.
+    # Prompts near-identical to a training prompt are dropped so this stays a held-out slice.
+    fiction_eval, n_fiction_train_near = drop_near_duplicates_of(
+        fiction_pool, train_df["prompt"].tolist(), heldout_thr, k, num_perm, seed
+    )
+    if quick:
+        fiction_eval = fiction_eval.sample(min(200, len(fiction_eval)), random_state=seed).reset_index(drop=True)
+    fiction_metrics, fiction_summary = None, {"n": 0}
+    if len(fiction_eval):
+        f_preds = predictor.predict_batch(fiction_eval["prompt"].tolist())
+        fiction_eval = fiction_eval.assign(
+            **{key: [p[key] for p in f_preds] for key in ["creative_probability", "safety_probability", "creative_pred", "safety_pred"]}
+        )
+        f_y = fiction_eval["safety_label"].astype(int).to_numpy()
+        if 0 < f_y.sum() < len(f_y):
+            fiction_metrics = _strip_curves(compute_binary_metrics(f_y, fiction_eval["safety_probability"].to_numpy(), threshold=thr_s))
+        fiction_summary = {
+            "n": int(len(fiction_eval)),
+            "n_harmful": int(f_y.sum()),
+            "removed_near_duplicates_of_train": n_fiction_train_near,
+            "share_predicted_creative": round(float(fiction_eval["creative_pred"].mean()), 4),
+            "mean_creative_probability": round(float(fiction_eval["creative_probability"].mean()), 4),
+        }
+        fiction_out = fiction_eval[["id", "adversarial", "source_subcategory", "safety_label", "creative_probability",
+                                    "safety_probability", "creative_pred", "safety_pred", "prompt"]].copy()
+        fiction_out["human_creative_label"] = ""
+        fiction_out.to_csv(results_dir / "fictional_framing_predictions.csv", index=False)
 
     # 10. Error analysis (spec §17)
     errors = {
@@ -161,6 +248,20 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         "creative_head": _strip_curves(cre_metrics),
         "safety_head": _strip_curves(saf_metrics),
         "safety_head_wildguardtest": {**_strip_curves(wg_metrics), "n": int(len(wg_eval))},
+        "safety_head_fictional_framing_slice": {"summary": fiction_summary, "metrics": fiction_metrics},
+        "safety_threshold_comparison": threshold_comparison,
+        # Per-source and per-adversarial breakdowns: Dolly rows are all safety=0 and easy, so the blended
+        # test numbers overstate how well the safety head separates harmful from benign WildGuardMix prompts
+        "by_source_test": {
+            "creative_head": subgroup_metrics(pred_df, "creative_label", "creative_probability", "creative_pred", "source_dataset"),
+            "safety_head": subgroup_metrics(pred_df, "safety_label", "safety_probability", "safety_pred", "source_dataset"),
+        },
+        "by_adversarial": {
+            "test_wildguardmix_rows": subgroup_metrics(
+                pred_df[pred_df["source_dataset"] == "wildguardmix"], "safety_label", "safety_probability", "safety_pred", "adversarial"
+            ),
+            "wildguardtest": subgroup_metrics(wg_eval, "safety_label", "safety_probability", "safety_pred", "adversarial"),
+        },
         "per_quadrant_test_accuracy": per_quadrant,
         "error_counts": {k: int(v.sum()) for k, v in errors.items()},
         "aggregate": {
@@ -171,7 +272,10 @@ def run_m1(root_dir: Path = Path("."), quick: bool = False) -> dict:
         },
     }
     save_json(metrics_out, results_dir / "metrics.json")
-    save_json({"m1_config": cfg, "training_meta": train_meta}, results_dir / "experiment_config.json")
+    save_json(
+        {"m1_config": cfg, "training_meta": train_meta, "dataset_versions": raw_meta, "environment": environment_info()},
+        results_dir / "experiment_config.json",
+    )
     logger.info("Completed M1 pipeline", macro_f1=metrics_out["aggregate"]["macro_f1"])
     return metrics_out
 

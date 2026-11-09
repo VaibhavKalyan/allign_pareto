@@ -45,8 +45,11 @@ class SentenceEmbedder:
 
 class BalancedLogisticRegressionHead:
     """
-    Balanced L2-Regularized Logistic Regression head with L-BFGS-B optimization
-    and Platt scaling calibration. Uses `scikit-learn` if installed, or pure SciPy L-BFGS-B.
+    Balanced L2-Regularized Logistic Regression head, fitted with SciPy L-BFGS-B, plus Platt scaling on the
+    validation split. The objective matches scikit-learn's LogisticRegression(C, class_weight="balanced")
+    divided by C*n: mean(weighted log-loss) + ||w||^2 / (2*C*n), with an unpenalized intercept.
+    Platt scaling is fitted to the validation split's label mix, so probabilities reflect the pilot
+    dataset's class balance, not real-world prompt traffic.
     """
 
     def __init__(self, C: float = 2.0, max_iter: int = 1000, class_weight: str = "balanced", seed: int = 42):

@@ -3,7 +3,6 @@ Inference API for the ALIGN-PARETO Dual-Head Prompt Classifier.
 Returns calibrated `{creative_probability, safety_probability}` and binary labels.
 """
 from typing import Dict, List, Union
-import numpy as np
 
 
 class DualHeadPredictor:
@@ -28,7 +27,9 @@ class DualHeadPredictor:
         return res
 
     def predict_batch(self, prompts: List[str]) -> List[Dict[str, Union[float, int, str]]]:
-        X = self.embedder.transform(prompts)
+        # Same text cleaning as the training data (spec §12), so raw prompts are scored like training prompts
+        from src.data.cleaning import normalize_prompt_text
+        X = self.embedder.transform([normalize_prompt_text(p) for p in prompts])
         c_probs = self.creative_head.predict_proba(X)[:, 1]
         s_probs = self.safety_head.predict_proba(X)[:, 1]
         outputs = []
@@ -50,16 +51,16 @@ class DualHeadPredictor:
 if __name__ == "__main__":
     import sys, argparse, json
     from pathlib import Path
-    import pandas as pd
     root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(root))
     from src.utils.io import load_pickle, load_parquet
     parser = argparse.ArgumentParser(description="Run M1 Dual-Head Classifier Inference")
     parser.add_argument("--prompt", type=str, default=None, help="Custom prompt to classify")
+    parser.add_argument("--tag", type=str, default="m1", help="run tag used by run_m1 (m1 or m1_quick)")
     args = parser.parse_args()
 
-    cre_bundle = load_pickle(root / "models/m1/creative_classifier.pkl")
-    saf_bundle = load_pickle(root / "models/m1/safety_classifier.pkl")
+    cre_bundle = load_pickle(root / "models" / args.tag / "creative_classifier.pkl")
+    saf_bundle = load_pickle(root / "models" / args.tag / "safety_classifier.pkl")
     predictor = DualHeadPredictor(
         cre_bundle["embedder"], cre_bundle["head"], saf_bundle["head"],
         cre_bundle["threshold"], saf_bundle["threshold"]
@@ -68,15 +69,15 @@ if __name__ == "__main__":
         print("=== Custom Prompt Classification ===")
         print(json.dumps(predictor.predict_single(args.prompt), indent=2))
     else:
-        test_df = load_parquet(root / "data/processed/test.parquet")
+        # Re-scores the test split written by run_m1; writes to a separate file so the pipeline's
+        # predictions.csv is never overwritten
+        test_df = load_parquet(root / "data/processed" / args.tag / "test.parquet")
         preds = predictor.predict_batch(test_df["prompt"].tolist())
         pred_df = test_df.copy()
-        pred_df["creative_probability"] = [p["creative_probability"] for p in preds]
-        pred_df["safety_probability"] = [p["safety_probability"] for p in preds]
-        pred_df["creative_pred"] = [p["creative_pred"] for p in preds]
-        pred_df["safety_pred"] = [p["safety_pred"] for p in preds]
+        for key in ["creative_probability", "safety_probability", "creative_pred", "safety_pred"]:
+            pred_df[key] = [p[key] for p in preds]
         pred_df["predicted_quadrant"] = [p["quadrant"] for p in preds]
-        (root / "results/m1").mkdir(parents=True, exist_ok=True)
-        pred_df.to_csv(root / "results/m1/predictions.csv", index=False)
-        print("=== [Step 6: Batch & Single-Prompt Inference (src/classifier/predict.py)] ===")
-        print(f"Generated predictions for {len(pred_df)} test prompts -> saved to results/m1/predictions.csv")
+        out = root / "results" / args.tag / "predictions_cli.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        pred_df.to_csv(out, index=False)
+        print(f"Generated predictions for {len(pred_df)} test prompts -> {out.relative_to(root)}")

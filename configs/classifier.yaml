@@ -12,6 +12,8 @@ data:
     creative1_safety1: 1000
   min_char_len: 15
   near_dup_jaccard_threshold: 0.90
+  # Training-pool prompts this similar to a held-out WildGuardTest prompt are removed (leakage, spec §13)
+  heldout_near_dup_jaccard_threshold: 0.50
   family_jaccard_threshold: 0.50
   minhash_num_perm: 128
   shingle_k: 3
@@ -31,7 +33,13 @@ training:
   seed: 42
   batch_size: 256
 inference:
-  # Decision thresholds are tuned on the validation split (max F1); these are only the search range.
+  # Decision thresholds are tuned on the validation split; these are only the search range.
+  # Creative head: max F1. Safety head: highest threshold with recall >= safety_target_recall (or the max-F1
+  # threshold if that is lower, so recall never drops below the max-F1 choice), because the
+  # safety head routes prompts and a missed harmful prompt costs more than a false alarm (spec §16).
+  # Set safety_threshold_objective to "f1" to get the previous behaviour.
+  safety_threshold_objective: target_recall
+  safety_target_recall: 0.95
   threshold_grid_min: 0.05
   threshold_grid_max: 0.95
   threshold_grid_step: 0.01
