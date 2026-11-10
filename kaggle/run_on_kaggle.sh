@@ -75,10 +75,12 @@ log "Kaggle output saved to $OUT"
 
 PROJECT="$OUT/align-pareto"
 for sub in results models data/processed; do
-    if [[ -d $PROJECT/$sub/$MILESTONE ]]; then
-        rm -rf "${ROOT:?}/$sub/$MILESTONE"
-        mkdir -p "$ROOT/$sub"
-        cp -r "$PROJECT/$sub/$MILESTONE" "$ROOT/$sub/$MILESTONE"
-        log "Updated $sub/$MILESTONE"
-    fi
+    for name in "$MILESTONE" "${MILESTONE}_quick"; do
+        if [[ -d $PROJECT/$sub/$name ]]; then
+            rm -rf "${ROOT:?}/$sub/$name"
+            mkdir -p "$ROOT/$sub"
+            cp -r "$PROJECT/$sub/$name" "$ROOT/$sub/$name"
+            log "Updated $sub/$name"
+        fi
+    done
 done

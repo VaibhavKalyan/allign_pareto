@@ -15,3 +15,9 @@ models/
 
 # Office lock files
 .~lock*
+
+# Raw model replies (many judged harmful; prompts come from gated WildGuardMix): kept local / on Kaggle, not pushed
+results/*/responses/
+results/*/raw_responses.jsonl
+# Smoke-test results, never reported
+results/*_quick/

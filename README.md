@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 done (v4, 2026-11-10): SFT on no_robots + oasst2, no DPO. M3 aligned model decided: Qwen's `Qwen/Qwen3-0.6B`, λ blends the weights; M3–M4 not run yet.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 done (v4, 2026-11-10): SFT on no_robots + oasst2, no DPO. M3 done (2026-11-10): λ blends our SFT model and Qwen's `Qwen/Qwen3-0.6B`; safety rises and creativity falls steadily with λ, every λ is Pareto-optimal (`results/m3/pareto.csv`, `results/m3/plots/`). M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -67,13 +67,19 @@ Models (`configs/evaluation.yaml` → `models`, details in [`docs/EVAL_PROTOCOL.
 carries all of Qwen's post-training, not only safety. Group B compares the two endpoints.
 | Step | File | State |
 |---|---|---|
-| Safety: harmful refusal rate, benign false-refusal rate | `src/evaluation/safety.py` | to write |
-| Creativity on creative prompts: diversity (1 − mean pairwise cosine), semantic cluster count, novelty | `src/evaluation/creativity.py` | to write |
-| λ dial: weight interpolation SFT → Qwen3-0.6B | `src/alignment/interpolate.py` | done (not yet run) |
-| Check before the sweep: endpoints exact, every λ replies normally | `src/check_interpolation.py`, `notebooks/03_interp_check_kaggle.ipynb` → `results/m3_interp_check/` | to run: `kaggle/publish_adapters.sh`, then `kaggle/run_on_kaggle.sh m3_interp_check` |
+| Batched seeded sampling (N = 5 per prompt) | `src/evaluation/generate.py` | done |
+| Safety judge: Qwen3Guard-Gen-4B (harm + refusal in one call) | `src/evaluation/judge.py` | done |
+| Metrics: harmful response / refusal / over-refusal rates; diversity, clusters; lexical diversity (style side metric); broken replies; Pareto table | `src/evaluation/metrics.py`, `tests/test_m3_metrics.py` | done |
+| Orchestrator: generate → judge → score, resumable, `--quick` | `src/run_m3.py` | done |
+| λ dial: weight interpolation SFT → Qwen3-0.6B (endpoints checked exact at the start of every run) | `src/alignment/interpolate.py` | done |
 | Shared eval prompt set (400 prompts from M1 val/test) + protocol for Group B | `src/evaluation/build_eval_set.py`, `docs/EVAL_PROTOCOL.md` | done |
-| Publish the M2 SFT adapter as Kaggle dataset `align-pareto-m2-adapters` (M3 + Group B input) | `kaggle/publish_adapters.sh` | run after M2 |
-| N=5 generations per λ, raw responses, Pareto frontier + plots | `notebooks/03_lambda_sweep_kaggle.ipynb` | to write |
+| Publish the M2 SFT adapter as Kaggle dataset `align-pareto-m2-adapters` (M3 + Group B input) | `kaggle/publish_adapters.sh` | done |
+| Kaggle notebook (kernel `align-pareto-m3-sweep`, GPU T4) | `notebooks/03_lambda_sweep_kaggle.ipynb` | done (`kaggle/run_on_kaggle.sh m3`): `results/m3/` |
+| Hand-check ~50 judge labels against `raw_responses.jsonl` (local only, not in git) | `docs/EVAL_PROTOCOL.md` §7 | to do |
+
+Known limitation of the M3 run: blended models stop less often than the endpoints, worst at λ = 0.5 (`stopped_rate`
+in `results/m3/metrics.csv`; λ = 0 ends with `<|endoftext|>`, λ = 1 with `<|im_end|>`). Their replies run longer,
+which can affect harm and diversity scores at middle λ.
 
 ### M4: Adaptive controller (§20)
 | Step | File | State |
@@ -90,7 +96,7 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 |---|---|
 | M1 | 15–30 min (CPU is enough) |
 | M2 | 1.5–2 h (SFT 8k examples + DPO 5k pairs × 2 epochs) |
-| M3 | 2–4 h (≈400 prompts × 5 samples × 5 λ, on val + test) |
+| M3 | ≈ 2.5–4 h (400 prompts × 5 samples × 5 λ = 10,000 replies, then judging) |
 | M4 | 0.5–1 h |
 | **Total** | **≈ 4–8 GPU hours** (weekly free quota is ~30 h, which leaves room for re-runs) |
 
