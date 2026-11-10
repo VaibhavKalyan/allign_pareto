@@ -1,0 +1,118 @@
+{
+  "quick_test": false,
+  "lambdas": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "n_prompts": 400,
+  "n_samples": 5,
+  "endpoint_check": {
+    "max_abs_logit_diff_lambda_0_vs_sft": 0.0,
+    "max_abs_logit_diff_lambda_1_vs_aligned": 0.0
+  },
+  "pareto": [
+    {
+      "split": "test",
+      "lambda": 0.0,
+      "safety": 0.274,
+      "creativity": 0.338,
+      "over_refusal_rate_safe": 0.048,
+      "refusal_rate_harmful": 0.232,
+      "broken_rate": 0.076,
+      "pareto_optimal": true
+    },
+    {
+      "split": "test",
+      "lambda": 0.25,
+      "safety": 0.326,
+      "creativity": 0.2911,
+      "over_refusal_rate_safe": 0.026,
+      "refusal_rate_harmful": 0.236,
+      "broken_rate": 0.056,
+      "pareto_optimal": true
+    },
+    {
+      "split": "test",
+      "lambda": 0.5,
+      "safety": 0.328,
+      "creativity": 0.2589,
+      "over_refusal_rate_safe": 0.026,
+      "refusal_rate_harmful": 0.206,
+      "broken_rate": 0.051,
+      "pareto_optimal": true
+    },
+    {
+      "split": "test",
+      "lambda": 0.75,
+      "safety": 0.358,
+      "creativity": 0.2186,
+      "over_refusal_rate_safe": 0.032,
+      "refusal_rate_harmful": 0.182,
+      "broken_rate": 0.007,
+      "pareto_optimal": true
+    },
+    {
+      "split": "test",
+      "lambda": 1.0,
+      "safety": 0.402,
+      "creativity": 0.2162,
+      "over_refusal_rate_safe": 0.036,
+      "refusal_rate_harmful": 0.216,
+      "broken_rate": 0.006,
+      "pareto_optimal": true
+    },
+    {
+      "split": "validation",
+      "lambda": 0.0,
+      "safety": 0.276,
+      "creativity": 0.3128,
+      "over_refusal_rate_safe": 0.04,
+      "refusal_rate_harmful": 0.184,
+      "broken_rate": 0.084,
+      "pareto_optimal": true
+    },
+    {
+      "split": "validation",
+      "lambda": 0.25,
+      "safety": 0.308,
+      "creativity": 0.2791,
+      "over_refusal_rate_safe": 0.03,
+      "refusal_rate_harmful": 0.152,
+      "broken_rate": 0.062,
+      "pareto_optimal": true
+    },
+    {
+      "split": "validation",
+      "lambda": 0.5,
+      "safety": 0.33,
+      "creativity": 0.2463,
+      "over_refusal_rate_safe": 0.036,
+      "refusal_rate_harmful": 0.168,
+      "broken_rate": 0.053,
+      "pareto_optimal": true
+    },
+    {
+      "split": "validation",
+      "lambda": 0.75,
+      "safety": 0.382,
+      "creativity": 0.2254,
+      "over_refusal_rate_safe": 0.018,
+      "refusal_rate_harmful": 0.128,
+      "broken_rate": 0.027,
+      "pareto_optimal": true
+    },
+    {
+      "split": "validation",
+      "lambda": 1.0,
+      "safety": 0.406,
+      "creativity": 0.2152,
+      "over_refusal_rate_safe": 0.032,
+      "refusal_rate_harmful": 0.158,
+      "broken_rate": 0.008,
+      "pareto_optimal": true
+    }
+  ]
+}

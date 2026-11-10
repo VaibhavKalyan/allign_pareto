@@ -34,6 +34,12 @@ REQUIRED_PRE_RUN_FILES = [
     "src/alignment/models.py",
     "src/alignment/train_sft.py",
     "src/run_m2.py",
+    "configs/evaluation.yaml",
+    "src/alignment/interpolate.py",
+    "src/evaluation/generate.py",
+    "src/evaluation/judge.py",
+    "src/evaluation/metrics.py",
+    "src/run_m3.py",
 ]
 
 

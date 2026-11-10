@@ -1,0 +1,10 @@
+{"timestamp": "2026-11-09T21:54:20.617524+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Starting M3", "data": {"quick": false, "stages": ["generate", "judge", "score"], "lambdas": [0.0, 0.25, 0.5, 0.75, 1.0], "n_prompts": 400, "n_samples": 5, "aligned_model": "Qwen/Qwen3-0.6B", "judge": "Qwen/Qwen3Guard-Gen-4B"}}
+{"timestamp": "2026-11-09T21:55:23.226700+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Endpoint check", "data": {"max_abs_logit_diff_lambda_0_vs_sft": 0.0, "max_abs_logit_diff_lambda_1_vs_aligned": 0.0}}
+{"timestamp": "2026-11-09T22:24:54.610901+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Generated", "data": {"lam": 0.0, "n": 2000, "minutes": 29.5, "stopped_rate": 0.44}}
+{"timestamp": "2026-11-09T22:54:30.832593+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Generated", "data": {"lam": 0.25, "n": 2000, "minutes": 29.6, "stopped_rate": 0.304}}
+{"timestamp": "2026-11-09T23:24:02.831435+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Generated", "data": {"lam": 0.5, "n": 2000, "minutes": 29.5, "stopped_rate": 0.022}}
+{"timestamp": "2026-11-09T23:53:35.400853+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Generated", "data": {"lam": 0.75, "n": 2000, "minutes": 29.5, "stopped_rate": 0.309}}
+{"timestamp": "2026-11-10T00:22:51.309216+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Generated", "data": {"lam": 1.0, "n": 2000, "minutes": 29.3, "stopped_rate": 0.369}}
+{"timestamp": "2026-11-10T02:07:09.745809+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Judged", "data": {"n": 10000, "newly_judged": 10000, "unparsed": 0}}
+{"timestamp": "2026-11-10T02:07:34.765112+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Scored", "data": {"n_metric_rows": 440}}
+{"timestamp": "2026-11-10T02:07:34.800948+00:00", "logger": "m3_pipeline", "level": "INFO", "message": "Completed M3"}

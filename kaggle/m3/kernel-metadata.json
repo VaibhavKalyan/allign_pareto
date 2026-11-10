@@ -1,7 +1,7 @@
 {
-  "id": "vaibhavkalyan/align-pareto-m3-interp-check",
-  "title": "align-pareto-m3-interp-check",
-  "code_file": "03_interp_check_kaggle.ipynb",
+  "id": "vaibhavkalyan/align-pareto-m3-sweep",
+  "title": "align-pareto-m3-sweep",
+  "code_file": "03_lambda_sweep_kaggle.ipynb",
   "language": "python",
   "kernel_type": "notebook",
   "is_private": true,
