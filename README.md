@@ -3,7 +3,7 @@
 Prompt-adaptive alignment for studying and reducing the alignment tax in LLMs.
 Master spec: [`docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md`](docs/ALIGN_PARETO_ANTIGRAVITY_INSTRUCTIONS_v2.md) (section numbers below refer to it).
 
-**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 done (v4, 2026-11-10): SFT on no_robots + oasst2, no DPO. M3 done (2026-11-10): λ blends our SFT model and Qwen's `Qwen/Qwen3-0.6B`; safety rises and creativity falls steadily with λ, every λ is Pareto-optimal (`results/m3/pareto.csv`, `results/m3/plots/`). M4 not started.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
+**Status: M1 re-run on Kaggle with the revised code (2026-11-09); `results/m1/` is current. Creative F1 0.75 and safety F1 0.74 are still below the 0.80 target (safety recall 0.96). M2 done (v4, 2026-11-10): SFT on no_robots + oasst2, no DPO. M3 done (2026-11-10): λ blends our SFT model and Qwen's `Qwen/Qwen3-0.6B`; safety rises and creativity falls steadily with λ, every λ is Pareto-optimal (`results/m3/pareto.csv`, `results/m3/plots/`). M4 done (2026-11-11): adaptive λ, see `results/m4/summary.json`.** Every number reported here must come from a real run. Never type results in by hand (spec §37.11).
 
 ## Folder layout
 
@@ -81,11 +81,17 @@ Known limitation of the M3 run: blended models stop less often than the endpoint
 in `results/m3/metrics.csv`; λ = 0 ends with `<|endoftext|>`, λ = 1 with `<|im_end|>`). Their replies run longer,
 which can affect harm and diversity scores at middle λ.
 
-### M4: Adaptive controller (§20)
+### M4: Adaptive controller (§20), CPU only, from the M3 results
+One λ per **predicted** quadrant (M1 classifier on the 400 eval prompts), calibrated on **validation**: the most
+creative policy that is at least as safe as fixed λ = 1 ("as safe as the aligned model, but more creative"). The old
+fixed floor 0.88 came from the archived simulated code and is unreachable here (λ = 1 reaches ~0.41). No new
+generation: a policy is scored from M3's judged replies at the λ it picks. Compared on **test** with fixed λ and an
+oracle that uses the true quadrant, with paired bootstrap 95% intervals.
 | Step | File | State |
 |---|---|---|
-| λ*(x) from classifier probs, calibrated on the **val** sweep: maximise creativity subject to safety ≥ floor | `src/alignment/lambda_controller.py` | to write |
-| Final comparison on **test**: base, λ=1, λ=0.5, adaptive | `notebooks/04_adaptive_controller_kaggle.ipynb` | to write |
+| Length-matched check of M3 (replies cut to 40 words; safety on full-length replies only) | `src/evaluation/length_check.py` → `results/m3/length_check.*` | done: curve holds |
+| Controller: policy scoring, calibration, bootstrap | `src/alignment/controller.py`, `tests/test_m4_controller.py` | done |
+| Orchestrator: classify → calibrate → evaluate | `src/run_m4.py` → `results/m4/` | done |
 
 ### Optional (only after M4 works, §35)
 Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysis (§26) · Streamlit dashboard.
@@ -97,7 +103,7 @@ Null-space projection `src/alignment/nullspace.py` (§27) · value-shift analysi
 | M1 | 15–30 min (CPU is enough) |
 | M2 | 1.5–2 h (SFT 8k examples + DPO 5k pairs × 2 epochs) |
 | M3 | ≈ 2.5–4 h (400 prompts × 5 samples × 5 λ = 10,000 replies, then judging) |
-| M4 | 0.5–1 h |
+| M4 | < 1 min on CPU (no GPU; reuses the M3 replies) |
 | **Total** | **≈ 4–8 GPU hours** (weekly free quota is ~30 h, which leaves room for re-runs) |
 
 ## Run

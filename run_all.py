@@ -40,6 +40,9 @@ REQUIRED_PRE_RUN_FILES = [
     "src/evaluation/judge.py",
     "src/evaluation/metrics.py",
     "src/run_m3.py",
+    "src/evaluation/length_check.py",
+    "src/alignment/controller.py",
+    "src/run_m4.py",
 ]
 
 

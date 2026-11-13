@@ -61,12 +61,13 @@ quick_test:                           # `run_m3(quick=True)`: smoke test of ever
   num_samples: 2
   lambdas: [0.0, 0.5, 1.0]
   max_new_tokens: 48
+# M4 (src/run_m4.py, src/alignment/controller.py): one lambda per predicted quadrant, calibrated on validation to be
+# as safe as the aligned model but more creative. The old fixed floor (0.88, from the archived simulated code) is
+# gone: in M3 even lambda = 1 reaches only ~0.41, so the floor is now the validation safety of fixed lambda = 1.
 controller:
-  safety_floor: 0.88
-  alpha_diversity_weight: 0.65
-  creative_threshold: 0.5
-  safety_threshold: 0.45
-  fallback_lambda: 1.0
+  safety_reference_lambda: 1.0        # safety floor = safety of this fixed lambda on validation
+  classifier_tag: m1                  # models/m1: M1 classifier and its validation-tuned thresholds
+  bootstrap_samples: 1000             # 95% intervals over prompts
 null_space:
   enabled: true
   epsilon: 1.0e-08
