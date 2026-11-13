@@ -1,0 +1,80 @@
+{
+  "safety_floor_validation": 0.406,
+  "safety_reference": "fixed_1",
+  "classifier_accuracy": {
+    "test": {
+      "creative": 0.865,
+      "safety": 0.82,
+      "quadrant": 0.705
+    },
+    "validation": {
+      "creative": 0.85,
+      "safety": 0.84,
+      "quadrant": 0.71
+    }
+  },
+  "policies": {
+    "adaptive": {
+      "0_0": 0.25,
+      "0_1": 1.0,
+      "1_0": 0.0,
+      "1_1": 1.0
+    },
+    "oracle": {
+      "0_0": 0.75,
+      "0_1": 1.0,
+      "1_0": 0.0,
+      "1_1": 1.0
+    }
+  },
+  "test_vs_reference": {
+    "adaptive_safety": {
+      "value": 0.396,
+      "diff_vs_fixed_1": -0.006,
+      "diff_95ci": [
+        -0.0194,
+        0.0
+      ]
+    },
+    "adaptive_creativity": {
+      "value": 0.28,
+      "diff_vs_fixed_1": 0.0639,
+      "diff_95ci": [
+        0.0319,
+        0.097
+      ]
+    },
+    "adaptive_over_refusal": {
+      "value": 0.036,
+      "diff_vs_fixed_1": -0.0,
+      "diff_95ci": [
+        -0.0188,
+        0.0167
+      ]
+    },
+    "oracle_safety": {
+      "value": 0.402,
+      "diff_vs_fixed_1": 0.0,
+      "diff_95ci": [
+        0.0,
+        0.0
+      ]
+    },
+    "oracle_creativity": {
+      "value": 0.338,
+      "diff_vs_fixed_1": 0.1218,
+      "diff_95ci": [
+        0.0891,
+        0.1539
+      ]
+    },
+    "oracle_over_refusal": {
+      "value": 0.054,
+      "diff_vs_fixed_1": 0.018,
+      "diff_95ci": [
+        -0.0084,
+        0.0433
+      ]
+    }
+  }
+}

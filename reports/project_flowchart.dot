@@ -1,0 +1,64 @@
+// ALIGN-PARETO project flow. Render: dot -Tpng -Gdpi=160 project_flowchart.dot -o project_flowchart.png
+digraph ALIGN_PARETO {
+  graph [rankdir=TB, fontname="Helvetica", fontsize=13, nodesep=0.35, ranksep=0.45, bgcolor="white",
+         label="ALIGN-PARETO: what was done, M1 → M4", labelloc=t, fontsize=18];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, color="#555555", penwidth=1.0, margin="0.15,0.08"];
+  edge  [color="#555555", fontname="Helvetica", fontsize=9, arrowsize=0.7];
+
+  // Inputs
+  dolly   [label="Dolly-15k\n15,011 instructions", fillcolor="#f0efec"];
+  wgm     [label="WildGuardMix\n86,759 prompts, harmful / unharmful", fillcolor="#f0efec"];
+  base    [label="Qwen3-0.6B-Base\npretrained only, cannot chat", fillcolor="#f0efec"];
+  sftdata [label="no_robots + oasst2\n~14,000 human-written replies", fillcolor="#f0efec"];
+  qwen    [label="Qwen3-0.6B (Qwen's own)\nchat + safety aligned", fillcolor="#f0efec"];
+
+  subgraph cluster_m1 {
+    label="M1  ·  prompt classifier  (CPU)"; style="rounded,filled"; fillcolor="#e7f1fb"; color="#9bbbd9";
+    m1prep  [label="Map labels by rules · remove near-duplicates\nsplit 80 / 10 / 10 by prompt family", fillcolor="white"];
+    m1model [label="MiniLM sentence embedding\n+ 2 logistic-regression heads (creative, harmful)", fillcolor="white"];
+    m1res   [label="Test F1: creative 0.75 · harmful 0.74\nharmful recall 0.96 (target 0.80 F1 missed)", fillcolor="#fbebeb"];
+    m1prep -> m1model -> m1res;
+  }
+
+  evalset [label="Evaluation set: 400 prompts\nfrom M1 val + test · 4 quadrants (creative × harmful)\n× 2 splits × 50", fillcolor="#f9eeda"];
+
+  subgraph cluster_m2 {
+    label="M2  ·  unaligned model  (Kaggle T4)"; style="rounded,filled"; fillcolor="#e5f4e4"; color="#9cc79a";
+    m2tries [label="v1 DPO on aligned model: no effect\nv2 hh-rlhf SFT + DPO: looped / refused everything\nv3 SFT, ends with <|im_end|>: never stopped", fillcolor="white"];
+    m2sft   [label="v4 kept: LoRA SFT, replies end with <|endoftext|>\n889 steps · eval loss 1.82 · no safety training", fillcolor="white"];
+    m2tries -> m2sft [label=" fixes", style=dashed];
+  }
+
+  subgraph cluster_m3 {
+    label="M3  ·  λ sweep  (Kaggle T4, ~3–4 h)"; style="rounded,filled"; fillcolor="#efedff"; color="#b0a8e0";
+    blend  [label="Blend weights: W(λ) = W_SFT + λ (W_Qwen − W_SFT)\nλ = 0, 0.25, 0.5, 0.75, 1 · ends checked exact (0.0)", fillcolor="white"];
+    gen    [label="Generate 5 replies per prompt per λ\n400 × 5 × 5 = 10,000 replies", fillcolor="white"];
+    judge  [label="Judge every reply: Qwen3Guard-Gen-4B\nSafe / Unsafe / Controversial · refusal yes / no", fillcolor="white"];
+    score  [label="Metrics: safety = 1 − harmful rate (harmful prompts)\ncreativity = semantic diversity (creative, safe prompts)\n+ over-refusal, clusters, lexical diversity, broken replies", fillcolor="white"];
+    m3res  [label="Trade-off curve: safety 0.276 → 0.406\ncreativity 0.313 → 0.215 (−31%) · every λ Pareto-optimal\nlength-matched check: curve holds", fillcolor="#fbebeb"];
+    blend -> gen -> judge -> score -> m3res;
+  }
+
+  subgraph cluster_m4 {
+    label="M4  ·  adaptive controller  (CPU, ~20 s)"; style="rounded,filled"; fillcolor="#f9ece7"; color="#d9a891";
+    m4pred [label="M1 predicts each eval prompt's quadrant", fillcolor="white"];
+    m4cal  [label="Calibrate on VALIDATION: one λ per predicted quadrant\nmost creative policy with safety ≥ fixed λ = 1\n→ creative-safe: λ 0 · harmful: λ 1 · plain: λ 0.25", fillcolor="white"];
+    m4eval [label="Score on TEST once, from M3's judged replies\nvs fixed λ and oracle (true labels) · bootstrap 95% CI", fillcolor="white"];
+    m4res  [label="Adaptive: creativity 0.280 vs 0.216 (+30%)\nsafety 0.396 vs 0.402 (−0.006)\nabove the M3 curve; gap to oracle = M1 errors", fillcolor="#fbebeb"];
+    m4pred -> m4cal -> m4eval -> m4res;
+  }
+
+
+  // Flow between parts
+  dolly -> m1prep; wgm -> m1prep;
+  m1res -> evalset [label=" val + test prompts"];
+  base -> m2tries; sftdata -> m2sft;
+  m2sft -> blend [label=" λ = 0 (unaligned)"];
+  qwen -> blend [label=" λ = 1 (aligned)"];
+  evalset -> gen [label=" prompts"];
+  m1model -> m4pred [label=" classifier", style=dashed];
+  evalset -> m4pred [style=dashed];
+  m3res -> m4cal [label=" per-prompt results"];
+
+  {rank=same; dolly; wgm; base; sftdata; qwen;}
+}

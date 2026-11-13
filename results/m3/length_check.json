@@ -1,0 +1,13 @@
+{
+  "words": 40,
+  "spearman_with_lambda": {
+    "test_safety_m3": 1.0,
+    "test_creativity_m3": -1.0,
+    "test_safety_full_length_replies": 0.9,
+    "test_creativity_first_40_words": -1.0,
+    "validation_safety_m3": 1.0,
+    "validation_creativity_m3": -1.0,
+    "validation_safety_full_length_replies": 1.0,
+    "validation_creativity_first_40_words": -1.0
+  }
+}
